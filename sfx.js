@@ -106,9 +106,14 @@ const SFX = (() => {
       tone({ type: 'sine', freq: 140, to: 55, dur: 0.14, gain: 0.25 });
       noise({ dur: 0.16, gain: 0.12, filter: 'lowpass', freq: 600, to: 200 });
     },
+    // Metal ladder rung: a sharp clank with ringing, inharmonic overtones plus a boot knock.
     rung: () => {
-      tone({ type: 'triangle', freq: vary(880, 0.05), dur: 0.09, gain: 0.08 });
-      tone({ type: 'sine', freq: vary(1320, 0.05), dur: 0.12, gain: 0.05 });
+      const base = vary(520, 0.06);
+      noise({ dur: 0.04, gain: 0.25, filter: 'highpass', freq: 3000 });
+      tone({ type: 'square', freq: base, dur: 0.07, gain: 0.12 });
+      tone({ type: 'triangle', freq: base * 2.76, dur: 0.22, gain: 0.14 });
+      tone({ type: 'sine', freq: base * 5.4, dur: 0.3, gain: 0.08 });
+      tone({ type: 'sine', freq: 140, to: 80, dur: 0.08, gain: 0.2 });
     },
 
     // ---- Doors, hatches, airlock ----
@@ -144,9 +149,19 @@ const SFX = (() => {
     },
 
     // ---- Rocket and rover ----
+    // Engine ignition at the start of the descent.
+    ignition: () => {
+      noise({ dur: 0.9, gain: 0.5, freq: 300, to: 2400, q: 0.6, attack: 0.05 });
+      tone({ type: 'sawtooth', freq: 60, to: 140, dur: 0.6, gain: 0.25, attack: 0.03 });
+    },
+    // Touchdown: heavy thud, landing-leg clank, engine cut-off hiss and settling dust.
     touchdown: () => {
-      tone({ type: 'sine', freq: 90, to: 35, dur: 0.6, gain: 0.4 });
-      noise({ dur: 1.4, gain: 0.22, filter: 'lowpass', freq: 900, to: 150 });
+      tone({ type: 'sine', freq: 110, to: 35, dur: 0.7, gain: 0.6 });
+      tone({ type: 'square', freq: 180, to: 90, dur: 0.15, gain: 0.2 });
+      tone({ type: 'triangle', freq: 640, dur: 0.35, gain: 0.12, delay: 0.04 });
+      tone({ type: 'sine', freq: 1720, dur: 0.4, gain: 0.06, delay: 0.04 });
+      noise({ dur: 0.9, gain: 0.35, filter: 'highpass', freq: 2500, to: 6000 });
+      noise({ dur: 1.8, gain: 0.3, filter: 'lowpass', freq: 1500, to: 150 });
     },
     brake: () => noise({ dur: 0.5, gain: 0.12, filter: 'lowpass', freq: 1400, to: 300 }),
     chime: () => notes([784, 988, 1175], { type: 'sine', dur: 0.4, gain: 0.12, gap: 0.12 }),
@@ -195,18 +210,34 @@ const SFX = (() => {
 
   // Continuous sounds. level 0..1 drives volume (and pitch where it fits).
   const loops = {
+    // Rocket engine: deep rumble plus a mid-range roar so it is audible on laptop speakers,
+    // with a fast flutter like a real exhaust plume.
     thrust: () => {
       const src = ctx.createBufferSource();
       src.buffer = noiseBuffer; src.loop = true;
-      const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 500;
-      const rumble = ctx.createOscillator(); rumble.type = 'sawtooth'; rumble.frequency.value = 42;
-      const rumbleGain = ctx.createGain(); rumbleGain.gain.value = 0.25;
+      const low = ctx.createBiquadFilter(); low.type = 'lowpass'; low.frequency.value = 500;
+      const roar = ctx.createBiquadFilter(); roar.type = 'bandpass'; roar.frequency.value = 1200; roar.Q.value = 0.7;
+      const roarGain = ctx.createGain(); roarGain.gain.value = 0.55;
+      const rumble = ctx.createOscillator(); rumble.type = 'sawtooth'; rumble.frequency.value = 46;
+      const rumbleGain = ctx.createGain(); rumbleGain.gain.value = 0.3;
+      const flutter = ctx.createOscillator(); flutter.frequency.value = 13;
+      const flutterDepth = ctx.createGain(); flutterDepth.gain.value = 0.15;
+      const body = ctx.createGain(); body.gain.value = 0.85;
       const amp = ctx.createGain(); amp.gain.value = 0;
-      src.connect(f).connect(amp);
-      rumble.connect(rumbleGain).connect(f);
-      amp.connect(master);
-      src.start(); rumble.start();
-      return { amp, max: 0.5, nodes: [src, rumble], set(level) { f.frequency.setTargetAtTime(250 + level * 600, ctx.currentTime, 0.1); } };
+      src.connect(low).connect(body);
+      src.connect(roar).connect(roarGain).connect(body);
+      rumble.connect(rumbleGain).connect(low);
+      flutter.connect(flutterDepth).connect(body.gain);
+      body.connect(amp).connect(master);
+      src.start(); rumble.start(); flutter.start();
+      return {
+        amp, max: 0.75, nodes: [src, rumble, flutter],
+        set(level) {
+          const t = ctx.currentTime;
+          low.frequency.setTargetAtTime(300 + level * 700, t, 0.1);
+          roar.frequency.setTargetAtTime(700 + level * 900, t, 0.1);
+        }
+      };
     },
     hiss: () => {
       const src = ctx.createBufferSource();

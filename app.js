@@ -432,7 +432,8 @@ outpostGame.addEventListener('chapterchange', event => {
   touchControls.hidden = true;
   // Rocket engines roar during the descent.
   thrustSound?.stop();
-  thrustSound = SFX.loop('thrust', 0.9);
+  SFX.play('ignition');
+  thrustSound = SFX.loop('thrust', 1);
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) finishLanding();
 });
 landingCraft.addEventListener('animationend', event => {
