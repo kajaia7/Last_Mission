@@ -68,7 +68,17 @@ function createRoverDrive(onExit) {
     treadRow: 34, treadRows: 24,
     // The spinning face fades out from this fraction of its size, blending into the tread.
     faceFade: .74 };
-  const tireOutline = new Path2D('M43 1H75V4H83V9H89V15H94V23H98V32H101V59H98V68H94V75H89V81H82V86H26V84H15V80H10V74H6V63H3V33H5V23H9V16H15V10H23V6H33V3H43Z');
+  // The traced pixel outline is only used to cut the art out of the outpost picture.
+  const tireArtOutline = new Path2D('M43 1H75V4H83V9H89V15H94V23H98V32H101V59H98V68H94V75H89V81H82V86H26V84H15V80H10V74H6V63H3V33H5V23H9V16H15V10H23V6H33V3H43Z');
+  // Smooth, round tire shape traced as one outline: across the top of the tread,
+  // around the front face, back along the bottom and around the far edge of the tread.
+  const tireOutline = new Path2D();
+  tireOutline.moveTo(34, 1);
+  tireOutline.lineTo(66, 1);
+  tireOutline.ellipse(66, 43.5, 35, 42.5, 0, -Math.PI / 2, Math.PI / 2);
+  tireOutline.lineTo(34, 86);
+  tireOutline.ellipse(34, 43.5, 31, 42.5, 0, Math.PI / 2, Math.PI * 1.5);
+  tireOutline.closePath();
   const terrainScale = 2;
   const tires = [
     { x: 39, mount: 36, radius: 9.8, phase: .4 },
@@ -461,7 +471,7 @@ function createRoverDrive(onExit) {
     tireSprite.height = tireArt.height;
     const tire = tireSprite.getContext('2d');
     // Trace the outpost's middle wheel so its tread keeps the same perspective as the chassis.
-    tire.clip(tireOutline);
+    tire.clip(tireArtOutline);
     tire.drawImage(outpost, -tireArt.x, -tireArt.y);
 
     // A strip of tread rows that repeats seamlessly, so the band can roll.
@@ -472,9 +482,7 @@ function createRoverDrive(onExit) {
     // columns, so no hub pieces or the dark band/face border end up in the tread.
     const stripCtx = strip.getContext('2d');
     stripCtx.drawImage(tireSprite, 0, tireArt.treadRow, 30, tireArt.treadRows, 0, 0, 30, tireArt.treadRows);
-    for (let x = 30; x < tireArt.width; x += 22) {
-      stripCtx.drawImage(tireSprite, 8, tireArt.treadRow, 22, tireArt.treadRows, x, 0, 22, tireArt.treadRows);
-    }
+    stripCtx.drawImage(tireSprite, 29, tireArt.treadRow, 1, tireArt.treadRows, 30, 0, tireArt.width - 30, tireArt.treadRows);
     treadPattern = ctx.createPattern(strip, 'repeat');
     // Keep the tire round: light on top, shadow underneath.
     treadShade = ctx.createLinearGradient(0, 0, 0, tireArt.height);
@@ -522,6 +530,12 @@ function createRoverDrive(onExit) {
     ctx.fillRect(0, 0, width, height);
     ctx.fillStyle = treadShade;
     ctx.fillRect(0, 0, width, height);
+    ctx.restore();
+    ctx.save();
+    ctx.translate(-hubX, -hubY);
+    ctx.lineWidth = 2.4;
+    ctx.strokeStyle = '#231a1ecc';
+    ctx.stroke(tireOutline);
     ctx.restore();
 
     // Wheel face, rotated in its own (foreshortened) plane so it still reads as 3D,
@@ -595,13 +609,21 @@ function createRoverDrive(onExit) {
     const pitch = Math.atan2((front - rear) * heading, tires[0].x - tires.at(-1).x);
     const y = (front + rear) / 2;
 
+    // Soft shadow where the rover sits on the ground.
+    groundGlow(screenX - 2 * heading, y + 2, 60, 5.5, '#2a141c73', '#2a141c00');
     drawSuspension(axles, screenX, y, pitch);
     drawTire(axles[0], true);
     ctx.save();
     ctx.translate(screenX, y);
     ctx.rotate(pitch);
+    // Faint headlight glow on the ground ahead, then the headlamps themselves.
+    groundGlow(78 * heading, 6, 42, 5, '#ffe7b833', '#ffe7b800');
+    for (const lamp of [30, 46]) groundGlow(lamp * heading, -25, 6, 3.5, '#fff4d899', '#fff4d800');
+    ctx.save();
     ctx.scale(-roverScale * heading, roverScale);
+    ctx.filter = 'saturate(1.08) contrast(1.06)';
     ctx.drawImage(chassisSprite, -210, -260);
+    ctx.restore();
     ctx.restore();
     for (const axle of axles.slice(1)) drawTire(axle);
   }
