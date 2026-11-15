@@ -68,6 +68,12 @@ function createRoverDrive(onExit) {
   let tireSprite;
   let roadSprite;
   let dustInterval = 0;
+  let engineSound = null;
+
+  function stopEngine() {
+    engineSound?.stop();
+    engineSound = null;
+  }
 
   function groundAt(x) {
     const progress = Math.max(0, Math.min(1, (x - craterStart) / (craterEnd - craterStart)));
@@ -415,6 +421,7 @@ function createRoverDrive(onExit) {
 
   function cancel() {
     cancelAnimationFrame(frameId);
+    stopEngine();
     phase = 'idle';
     clearInput();
     closeResearchTask();
@@ -442,6 +449,8 @@ function createRoverDrive(onExit) {
   }
 
   function stopAtStation() {
+    SFX.play('brake');
+    SFX.play('chime');
     atStation = true;
     speed = 0;
     stepOutTime = reducedMotion.matches ? stepOutDuration : 0;
@@ -487,6 +496,7 @@ function createRoverDrive(onExit) {
   function interactAtStation() {
     const label = stationActionLabel();
     if (!label) return;
+    SFX.play('hatch');
     if (researchComplete) {
       input.clear();
       atStation = false;
@@ -519,6 +529,8 @@ function createRoverDrive(onExit) {
       return;
     }
     phase = 'leaving';
+    stopEngine();
+    SFX.play('hatch');
     transitionStart = performance.now();
     fade.hidden = false;
   }
@@ -570,6 +582,11 @@ function createRoverDrive(onExit) {
         if ((distance <= departure && speed < 0 && heading === -1)
           || (distance === 105 && speed < 0) || (distance === destination && speed > 0)) speed = 0;
       }
+      // Rover motor: louder and higher-pitched the faster it drives.
+      const motorOn = !atStation && phase === 'driving';
+      if (motorOn && !engineSound) engineSound = SFX.loop('engine', 0.3);
+      if (!motorOn && engineSound) stopEngine();
+      engineSound?.set(0.3 + Math.min(1, Math.abs(speed) / 145) * 0.7);
       updateDust(dt, distance - previousDistance);
       paint();
     }
@@ -602,6 +619,7 @@ function createRoverDrive(onExit) {
       || event.data !== 'mission-trainer:research-task-complete') return;
     closeResearchTask();
     researchComplete = true;
+    SFX.play('success');
     heading = -1;
     objective.textContent = 'Research complete. Walk back to the rover.';
     drive.focus({ preventScroll: true });
@@ -612,6 +630,7 @@ function createRoverDrive(onExit) {
     get awayFromOutpost() { return atStation || heading === -1; },
     start() {
       if (phase !== 'idle') return;
+      SFX.play('hatch');
       phase = 'entering';
       distance = departure;
       speed = 0;

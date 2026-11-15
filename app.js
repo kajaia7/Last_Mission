@@ -115,6 +115,14 @@ let baseAirlockSeen = false;
 let airlockTimer;
 let airlockDrag;
 let suppressLeverClick = false;
+let thrustSound = null;
+let airShowerSound = null;
+
+// Opening/closing a hatch or door plays a pressurized hiss.
+function passHatch(nextRoom) {
+  SFX.play('hatch');
+  changeScene(nextRoom);
+}
 
 const sceneSize = { width: scene.clientWidth, height: scene.clientHeight };
 new ResizeObserver(([entry]) => {
@@ -137,6 +145,7 @@ function jump(speed = jumpSpeed) {
     jumpStartHeight = 0;
     jumpStartSpeed = speed;
     jumpGravity = gravity;
+    SFX.play('jump');
   if (room === 'rocket' || room === 'rover') updateAction();
     requestFrame();
   }
@@ -172,6 +181,7 @@ function setConsole(open, trigger = activeConsoleButton) {
     return;
   }
   if (open === !lifeSupport.hidden) return;
+  SFX.play(open ? 'boot' : 'close');
   activeConsoleButton = trigger;
   lifeSupport.hidden = !open;
   outpostGame.inert = open;
@@ -229,6 +239,8 @@ function changeScene(nextRoom, startingDeck = 'storage') {
 function finishLanding() {
   if (landingSequence.hidden || location.hash !== '#chapter-1') return;
   landingSequence.hidden = true;
+  thrustSound?.stop(0.6);
+  thrustSound = null;
   showLandingAchievement();
   hasLanded = true;
   pilotExit = { hopAt: performance.now() + pilotSeatPause };
@@ -240,6 +252,7 @@ function finishLanding() {
 function showLandingAchievement() {
   if (hasLanded || !landingAchievement.hidden || location.hash !== '#chapter-1') return;
   landingAchievement.hidden = false;
+  SFX.play('achievement');
   landingAchievementTimer = window.setTimeout(() => { landingAchievement.hidden = true; }, 6500);
 }
 
@@ -247,6 +260,7 @@ function finishBaseEntry() {
   if (baseAirlock.hidden || baseAirlock.dataset.phase !== 'opening') return;
   closeAirlock();
   baseAirlockSeen = true;
+  SFX.play('hatch');
   changeScene('base');
   scene.focus({ preventScroll: true });
 }
@@ -254,13 +268,15 @@ function finishBaseEntry() {
 function closeAirlock() {
   window.clearTimeout(airlockTimer);
   airlockSteam.stop();
+  airShowerSound?.stop();
+  airShowerSound = null;
   clearLeverDrag();
   baseAirlock.hidden = true;
 }
 
 function enterBase() {
   if (baseAirlockSeen) {
-    changeScene('base');
+    passHatch('base');
     return;
   }
   heldKeys.clear();
@@ -273,6 +289,7 @@ function enterBase() {
   airlockLever.setAttribute('aria-pressed', 'false');
   airlockStatus.textContent = 'Press the lever or drag it down to start';
   baseAirlock.hidden = false;
+  SFX.play('hatch');
   suppressLeverClick = false;
   airlockLever.focus({ preventScroll: true });
 }
@@ -282,11 +299,16 @@ function startAirShower() {
   airlockLever.setAttribute('aria-pressed', 'true');
   baseAirlock.dataset.phase = 'spraying';
   airlockStatus.textContent = 'Air shower running';
+  SFX.play('lever');
+  airShowerSound = SFX.loop('hiss');
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   if (!reducedMotion) airlockSteam.start();
   airlockTimer = window.setTimeout(() => {
     baseAirlock.dataset.phase = 'opening';
     airlockStatus.textContent = 'Air shower complete. Door opening.';
+    airShowerSound?.stop(0.4);
+    airShowerSound = null;
+    SFX.play('doorOpen');
     // Finish even if the animation is interrupted by a motion setting change.
     airlockTimer = window.setTimeout(finishBaseEntry, reducedMotion ? 400 : 1900);
   }, reducedMotion ? 300 : 2000);
@@ -388,6 +410,8 @@ outpostGame.addEventListener('chapterchange', event => {
       touchControls.hidden = false;
     }
     landingSequence.hidden = true;
+    thrustSound?.stop();
+    thrustSound = null;
     if (!lifeSupport.hidden) setConsole(false);
     if (pilotExit) {
       finishPilotExit();
@@ -406,23 +430,33 @@ outpostGame.addEventListener('chapterchange', event => {
   astronaut.hidden = true;
   astronautShadow.hidden = true;
   touchControls.hidden = true;
+  // Rocket engines roar during the descent.
+  thrustSound?.stop();
+  thrustSound = SFX.loop('thrust', 0.9);
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) finishLanding();
 });
 landingCraft.addEventListener('animationend', event => {
   if (event.target === landingCraft) finishLanding();
 });
 landingSequence.addEventListener('animationend', event => {
-  if (event.animationName === 'show-settled-outpost') showLandingAchievement();
+  if (event.animationName === 'show-settled-outpost') {
+    // Engines cut at touchdown.
+    thrustSound?.stop(0.5);
+    thrustSound = null;
+    SFX.play('touchdown');
+    showLandingAchievement();
+  }
 });
 
 function climbLadder() {
   x = rooms.rocket.ladder;
-  climb = { startedAt: performance.now(), to: rocketDeck === 'storage' ? 'cabin' : 'storage' };
+  climb = { startedAt: performance.now(), to: rocketDeck === 'storage' ? 'cabin' : 'storage', rung: -1 };
   updateAction();
   requestFrame();
 }
 
 function openSubroom(name) {
+  SFX.play('slide');
   baseSubroom.hidden = false;
   baseSubroom.dataset.room = name;
   baseHotspots.hidden = true;
@@ -437,6 +471,7 @@ function openSubroom(name) {
 function openBasePanel(target, button) {
   panelTrigger = button;
   const [title, description] = basePanels[target];
+  SFX.play(target === 'computerLocked' ? 'denied' : 'blip');
   document.querySelector('#base-panel-title').textContent = title;
   document.querySelector('#base-panel-text').textContent = description;
   basePanel.hidden = false;
@@ -457,10 +492,11 @@ function updateAction() {
     nextAction = exitBase;
   } else if (!pilotExit && !arrivalTitleActive && station) {
     label = 'Enter ' + station;
-    nextAction = station === 'base' ? enterBase : () => changeScene(station);
+    nextAction = station === 'base' ? enterBase : () => passHatch(station);
   } else if (inStorage && cargoSetup.canUnload() && jumpStartedAt === null && Math.abs(x - rooms.rocket.cargo) <= 14) {
     label = 'Pick up server blocks';
     nextAction = () => {
+      SFX.play('pickup');
       cargoSetup.unload();
       updateAction();
     };
@@ -477,7 +513,7 @@ function updateAction() {
     };
   } else if (!pilotExit && room && room !== 'base' && !climb && rocketDeck === 'storage' && Math.abs(x - rooms[room].exit) <= 11) {
     label = 'Exit to surface';
-    nextAction = () => changeScene(null);
+    nextAction = () => passHatch(null);
   }
   action = nextAction;
   landingObjective.hidden = !pilotExit;
@@ -497,7 +533,7 @@ outpostGame.addEventListener('arrivaltitleend', () => {
 
 function exitBase() {
   setConsole(false);
-  changeScene(null);
+  passHatch(null);
   scene.focus();
 }
 
@@ -538,7 +574,7 @@ window.addEventListener('keydown', event => {
     else if (!basePanel.hidden) closeBasePanel.click();
     else if (room === 'base') exitBase();
     else if (room) {
-      changeScene(null);
+      passHatch(null);
       scene.focus();
     } else location.hash = '#chapters';
     return;
@@ -619,6 +655,7 @@ for (const control of subroomControls) {
   });
 }
 function returnToLobby() {
+  SFX.play('slide');
   if (!lifeSupport.hidden) setConsole(false);
   basePanel.hidden = true;
   baseSubroom.hidden = true;
@@ -631,6 +668,7 @@ function returnToLobby() {
 }
 subroomBack.addEventListener('click', returnToLobby);
 closeBasePanel.addEventListener('click', () => {
+  SFX.play('close');
   basePanel.hidden = true;
   panelTrigger.focus();
 });
@@ -664,7 +702,13 @@ function tick(now) {
   const wasClimbing = Boolean(climb);
   if (jumpStartedAt === null) {
     const frameDistance = sprinting ? 6 : 4.75;
+    const previousStep = Math.floor(stride);
     stride = moving ? (stride + Math.abs(nextX - x) / frameDistance) % gait.length : 0;
+    // A footstep each time a boot touches down (every other gait frame).
+    const currentStep = Math.floor(stride);
+    if (moving && !climb && currentStep !== previousStep && currentStep % 2 === 0) {
+      SFX.play('step', { metal: Boolean(room) });
+    }
   }
   if (direction) facing = direction;
   x = nextX;
@@ -682,6 +726,7 @@ function tick(now) {
     if (jumpHeight <= 0 && jumpElapsed > 0) {
       jumpHeight = 0;
       jumpStartedAt = null;
+      SFX.play('land');
     }
   }
 
@@ -694,6 +739,10 @@ function tick(now) {
     const steps = progress * climbSteps;
     const step = Math.floor(steps);
     const reach = steps - step;
+    if (step !== climb.rung && step < climbSteps) {
+      climb.rung = step;
+      SFX.play('rung');
+    }
     // The body transfers its weight onto each rung before the next reach.
     const distance = (step + reach * reach * (3 - 2 * reach)) / climbSteps;
     const frame = Math.floor(steps * 2) % 4;
@@ -729,7 +778,7 @@ function tick(now) {
   astronaut.style.transform = `translate3d(${screenX}px, ${screenY}px, 0) translateX(-50%) scaleX(${spriteFacing})`;
   if (pilotExit && x === destination && jumpStartedAt === null) {
     if (room === 'rocket' && rocketDeck === 'cabin') climbLadder();
-    else if (room === 'rocket') changeScene(null);
+    else if (room === 'rocket') passHatch(null);
     else finishPilotExit();
   }
   if (moving || (direction && dt === 0) || jumpStartedAt !== null || climb || pilotExit) requestFrame();

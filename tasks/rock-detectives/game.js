@@ -57,6 +57,7 @@ function render(){
 }
 function flight(from,to,done,deposit=false){
  const a=from.getBoundingClientRect(),b=to.getBoundingClientRect(),token=epoch;
+ SFX.play('whoosh');if(deposit)later(()=>SFX.play('drop'),390);
  flying.classList.remove('depositing');
  flying.innerHTML=rockArt(state.order[state.index],state.index);
  flying.style.transition='none';
@@ -70,7 +71,7 @@ function flight(from,to,done,deposit=false){
  later(()=>{if(deposit){flying.classList.add('depositing');later(()=>{flying.hidden=true;flying.classList.remove('depositing');done();},220);}else{flying.hidden=true;done();}},390);
 }
 function finishTool(tool,message){
- state=recordTool(state,tool);$('slot-'+tool).innerHTML='';
+ state=recordTool(state,tool);$('slot-'+tool).innerHTML='';SFX.play('blip');
  flight($('slot-'+tool),$('sample'),()=>{busy=false;$('use-'+tool).classList.remove('testing');render();status(allClues()?'Three clues recorded. Compare them with the guide and choose a bin.':message,'good');});
 }
 function useTool(tool){
@@ -78,7 +79,8 @@ function useTool(tool){
  busy=true;render();$('use-'+tool).classList.add('testing');status(tool==='scale'?'Weighing the equal-volume sample…':tool==='scope'?'Bringing the sample into focus…':'Measuring magnetic response…');
  flight($('sample'),$('slot-'+tool),()=>{
   $('slot-'+tool).innerHTML=rockArt(state.order[state.index],state.index);
-  if(tool==='scale'){for(let i=1;i<=8;i++)later(()=>{$('scale-reading').textContent=Math.round(current().mass*i/8)+' g';},i*85);later(()=>finishTool('scale','Mass recorded: '+current().mass+' g. Try another tool.'),900);}
+  if(tool==='magnet')SFX.play('zap');
+  if(tool==='scale'){for(let i=1;i<=8;i++)later(()=>{SFX.play('tick');$('scale-reading').textContent=Math.round(current().mass*i/8)+' g';},i*85);later(()=>finishTool('scale','Mass recorded: '+current().mass+' g. Try another tool.'),900);}
   if(tool==='magnet'){for(let i=1;i<=5;i++)later(()=>{$('magnet-reading').textContent=i%2?'···':'TEST';},i*105);later(()=>finishTool('magnet','Magnet recorded: '+current().pull.toLowerCase()+' response. Try another tool.'),850);}
   if(tool==='scope')openScope('sample');
  });
@@ -86,7 +88,7 @@ function useTool(tool){
 function openScope(mode){
  scopeMode=mode;const guide=mode==='guide';$('scope-dialog').classList.toggle('guide-mode',guide);$('unknown-view').hidden=guide;$('scope-title').textContent=guide?'Your rock reference guide':'Match your sample';$('scope-eyebrow').textContent=guide?'THREE TRAINING SPECIMENS · SAME VOLUME':'MICROSCOPE · TEXTURE COMPARISON';$('scope-done').textContent=guide?'BACK TO LAB →':'RECORD OBSERVATION →';
  if(!guide){$('unknown-texture').style.setProperty('--texture-x',current().position);$('unknown-label').textContent='SAMPLE '+String.fromCharCode(65+state.index)+' · NAME UNKNOWN';$('observation').textContent=current().texture;}
- $('scope-dialog').showModal();
+ SFX.play(guide?'page':'focus');$('scope-dialog').showModal();
 }
 function closeScope(){
  if(!$('scope-dialog').open)return;$('scope-dialog').close();
@@ -94,10 +96,11 @@ function closeScope(){
 }
 function chooseBin(bin){
  if(busy||state.phase!=='investigate')return;const result=sortSample(state,bin);
+ if(result.kind==='locked'||result.kind==='wrong')SFX.play('denied');
  if(result.kind==='locked'){const missing=TOOLS.filter(t=>!state.used[t]).map(t=>({scale:'scale',scope:'microscope',magnet:'magnet tester'}[t]));status('Collect all three clues first. Still needed: '+missing.join(', ')+'.','retry');return;}
  if(result.kind==='wrong'){state=result.state;$('bin-'+bin).classList.add('wrong');later(()=>$('bin-'+bin).classList.remove('wrong'),350);status('That bin doesn’t match all three clues. Compare with the reference guide and try again.','retry');return;}
  if(result.kind==='correct'){
-  busy=true;render();status('Storing the sample…');flight($('sample'),$('stored-'+bin),()=>{state=result.state;render();status('Correct! '+ROCKS[bin].name+'. A new page entry is ready.','good');later(()=>{busy=false;render();openNotes('discovery');},650);},true);
+  busy=true;render();status('Storing the sample…');flight($('sample'),$('stored-'+bin),()=>{state=result.state;SFX.play('success');render();status('Correct! '+ROCKS[bin].name+'. A new page entry is ready.','good');later(()=>{busy=false;render();openNotes('discovery');},650);},true);
  }
 }
 function renderNotes(highlight=null){
@@ -105,7 +108,7 @@ function renderNotes(highlight=null){
  $('notes-entries').innerHTML=Array.from({length:3},(_,i)=>{const type=state.sorted[i];if(!type)return `<article class="note-entry note-empty" aria-label="Undiscovered rock entry ${i+1}"><div class="note-placeholder" aria-hidden="true">?</div><div><span class="entry-number">DISCOVERY ${i+1}</span><h3>Rock still to discover</h3><p>Investigate and sort another sample to fill this space.</p><div class="blank-lines" aria-hidden="true"></div></div></article>`;const r=ROCKS[type];return `<article class="note-entry discovered ${type===highlight?'new-entry':''}" data-rock="${type}"><div class="note-photo"><div class="texture" style="--texture-x:${r.position}" role="img" aria-label="Magnified ${r.name.toLowerCase()} texture illustration"></div><span>MICROSCOPE VIEW</span></div><div class="note-facts"><span class="entry-number">DISCOVERY ${i+1}${type===highlight?' · NEW!':''}</span><h3>${r.name}</h3><ul>${r.learning.map(fact=>`<li>${fact}</li>`).join('')}</ul><p class="specimen-reading"><b>OUR 100 cm³ SAMPLE:</b> ${r.mass} g · ${r.pull==='None'?'no detectable':r.pull.toLowerCase()} magnet response</p></div></article>`;}).join('');
 }
 function openNotes(mode='review'){
- if(state.sorted.length===0||$('notes-dialog').open)return;notesMode=mode;renderNotes(mode==='discovery'?state.sorted.at(-1):null);$('notes-intro').textContent=state.sorted.length===3?'Your sheet is complete. Three rocks, three stories from Mars.':'A new rock, a new piece of Mars’ story. Fill all three entries.';
+ if(state.sorted.length===0||$('notes-dialog').open)return;notesMode=mode;SFX.play('page');renderNotes(mode==='discovery'?state.sorted.at(-1):null);$('notes-intro').textContent=state.sorted.length===3?'Your sheet is complete. Three rocks, three stories from Mars.':'A new rock, a new piece of Mars’ story. Fill all three entries.';
  $('notes-continue').textContent=mode==='review'?(state.phase==='complete'?'BACK TO RESULTS →':'BACK TO LAB →'):(state.phase==='complete'?'FINISH COLLECTION →':'NEXT SAMPLE →');$('notes-dialog').showModal();$('notes-entries').scrollTop=0;$('notes-continue').focus({preventScroll:true});
  if(mode==='discovery'){const token=epoch;requestAnimationFrame(()=>{if(token===epoch&&$('notes-dialog').open)$('notes-entries').querySelector('.new-entry')?.scrollIntoView({block:'nearest',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});});}
 }
@@ -117,7 +120,7 @@ function closeNotes(advance=false){
 }
 function setGameInert(value){for(const selector of ['#tools','#bins','#sample-area','.controls','#reference-board','#open-notes'])document.querySelector(selector).inert=value;}
 function win(){
- $('game').classList.add('complete');setGameInert(true);$('win').hidden=false;$('review-notes').focus({preventScroll:true});
+ SFX.play('win');$('game').classList.add('complete');setGameInert(true);$('win').hidden=false;$('review-notes').focus({preventScroll:true});
  for(let i=0;i<27;i++){const p=document.createElement('i');p.className='spark';p.style.cssText=`--x:${4+i*3.5}%;--delay:${i%6*.1}s;--colour:${['#f3c774','#8bdbca','#e78b60'][i%3]}`;$('celebration').append(p);}later(()=>$('celebration').replaceChildren(),4000);
 }
 function reset(){

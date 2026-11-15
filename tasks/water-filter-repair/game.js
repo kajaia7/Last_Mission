@@ -356,8 +356,11 @@ function showCompletion() {
   repairComplete.hidden = false;
   continueTasks.focus({ preventScroll: true });
 }
+// Sound for finishing each repair stage (index = stage just reached).
+const stageSounds = [null, 'valve', 'hatch', 'drop', 'install', 'slide', 'flow', 'win'];
 function advance() {
   state.stage++;
+  if (stageSounds[state.stage]) SFX.play(stageSounds[state.stage]);
   state.drag = null;
   state.turn = state.stage >= 6 ? 0 : 1;
   state.hatch = state.stage >= 2 && state.stage <= 4 ? 1 : 0;
@@ -382,6 +385,7 @@ canvas.addEventListener("pointerdown", event => {
   canvas.classList.add("pointer-focused");
   canvas.focus({ preventScroll: true });
   canvas.setPointerCapture(event.pointerId);
+  if (kind === 'old' || kind === 'spare') SFX.play('pickup');
   state.drag = { kind, id: event.pointerId, angle: angle(p.x,p.y), start: p.x,
     opening: state.hatch, x: p.x, y: p.y };
   canvas.dataset.cursor = "grabbing";
@@ -398,7 +402,9 @@ canvas.addEventListener("pointermove", event => {
   if (drag.kind === "valve") {
     const next = angle(p.x,p.y);
     const delta = Math.atan2(Math.sin(next - drag.angle), Math.cos(next - drag.angle));
+    const before = state.turn;
     state.turn = clamp(state.turn + delta / (Math.PI / 2));
+    if (Math.floor(before * 8) !== Math.floor(state.turn * 8)) SFX.play('tick');
     drag.angle = next;
     if ((state.stage === 0 && state.turn >= .97) || (state.stage === 5 && state.turn <= .03)) advance();
   } else if (drag.kind === "hatch") {
@@ -413,6 +419,7 @@ canvas.addEventListener("pointerup", event => {
   if (drag.kind === "old" && Math.abs(x - leftTray.x) < 103 && Math.abs(y - leftTray.y) < 69) advance();
   else if (drag.kind === "spare" && Math.abs(x - slot.x) < 66 && Math.abs(y - slot.y) < 67) advance();
   else {
+    if (drag.kind === "old" || drag.kind === "spare") SFX.play('back');
     if (drag.kind === "old" || drag.kind === "spare") line.textContent = stages[state.stage][1];
     state.drag = null;
   }

@@ -130,8 +130,11 @@ function showLeakingPressure(){
   if($('pressure-note').textContent!==note)$('pressure-note').textContent=note;
   setPressure(state.pressure);
 }
+let leakSound=null;
+function stopLeakSound(){leakSound?.stop(.6);leakSound=null;}
 function startLeak(){
   const token=epoch,start=performance.now();
+  stopLeakSound();leakSound=SFX.loop('hiss',.6);
   function drain(now){
     if(token!==epoch||!LEAKING_PHASES.has(state.phase))return;
     state.pressure=START_PRESSURE*Math.max(0,1-(now-start)/LEAK_DURATION);
@@ -143,6 +146,8 @@ function startLeak(){
 function scan(point){
   if(state.phase!=='search')return;
   const signal=signalAt(point,state.leakId);
+  // Scanner beeps faster and higher as the signal gets stronger.
+  const beepGap=900-signal*8;if(signal>=15&&performance.now()-lastBeep>beepGap){lastBeep=performance.now();SFX.play('scan',{signal});}
   const band=signal>=95?'VERY STRONG':signal>=72?'STRONG':signal>=43?'WARM':signal>=15?'FAINT':'QUIET';
   $('scanner-reading').textContent=band;
   $('scanner').dataset.band=signal>=72?'hot':signal>=43?'warm':'cold';
@@ -186,10 +191,12 @@ function render(){
   if(located)$('scan-cursor').hidden=true;
 }
 
+let lastBeep=0;
 function dispatch(action){const result=transition(state,action);state=result.state;if(result.changed)render();status(result.message,result.kind);return result;}
 function inspect(id){
   if(state.phase==='search'){
     scan(JOINTS[id]);const result=dispatch({type:'scan',jointId:id});
+    SFX.play(result.kind==='success'?'success':'blip',{pitch:.5});
     if(result.kind==='success')speak('There it is! Grab the repair patch. Drag it onto the glowing joint, or tap patch then leak.');
     else if(state.checked.length===2)speak('Two joints checked! Follow the scanner toward a stronger signal. You’re getting closer.');
   }else if(state.phase==='found'){
@@ -197,16 +204,18 @@ function inspect(id){
     place(id);
   }else if(state.phase==='placed'&&id===state.leakId)seal();
 }
-function takePatch(){if(state.phase==='found')dispatch({type:'take-patch'});}
-function place(id){const result=dispatch({type:'place-patch',jointId:id});if(result.changed){speak('Patch in place! Press it to tighten the bolts and seal the pipe.');$('joint-'+state.leakId).focus({preventScroll:true});}}
+function takePatch(){if(state.phase==='found'){SFX.play('pickup');dispatch({type:'take-patch'});}}
+function place(id){const result=dispatch({type:'place-patch',jointId:id});SFX.play(result.changed?'install':'denied');if(result.changed){speak('Patch in place! Press it to tighten the bolts and seal the pipe.');$('joint-'+state.leakId).focus({preventScroll:true});}}
 function seal(){
   if(!dispatch({type:'start-seal'}).changed)return;
+  SFX.play('ratchet');later(stopLeakSound,1350);
   later(()=>{dispatch({type:'finish-seal'});speak('All four bolts are snug. Let’s test the repair and make sure the cabin air recovers.');$('test-repair').focus({preventScroll:true});},1350);
 }
 function testRepair(){
   if(!dispatch({type:'start-test'}).changed)return;
+  SFX.play('pressurize');
   const token=epoch,start=performance.now(),sealedPressure=state.pressure;
-  const animate=now=>{if(token!==epoch||state.phase!=='testing')return;const t=Math.min(1,(now-start)/1800);setPressure(sealedPressure+(100-sealedPressure)*t);if(t<1)requestAnimationFrame(animate);else {dispatch({type:'finish-test'});confetti();$('return-tasks').focus({preventScroll:true});}};
+  const animate=now=>{if(token!==epoch||state.phase!=='testing')return;const t=Math.min(1,(now-start)/1800);setPressure(sealedPressure+(100-sealedPressure)*t);if(t<1)requestAnimationFrame(animate);else {dispatch({type:'finish-test'});SFX.play('win');confetti();$('return-tasks').focus({preventScroll:true});}};
   requestAnimationFrame(animate);
 }
 function confetti(){for(let i=0;i<16;i++){const p=document.createElement('i');p.style.cssText=`--x:${12+i*5}%;--delay:${i%5*.12}s`;$('effects').append(p);}later(()=>$('effects').replaceChildren(),4000);}
