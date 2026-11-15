@@ -1,0 +1,134 @@
+@font-face {
+  font-family: 'Pixelify Sans';
+  src: url('launcher-assets/pixelify-sans.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+}
+
+#mission-launcher {
+  --launcher-ink: #1c1420;
+  --launcher-cream: #fff1df;
+  --launcher-pixel: 'Pixelify Sans', var(--mono);
+  color: var(--launcher-cream);
+  max-width: 1040px;
+  padding-top: clamp(16px, 2.5vw, 36px);
+  container-type: size;
+  overflow: auto;
+}
+
+.launch-hero {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  width: min(100%, 94cqw, calc(100cqh * 1672 / 941));
+  aspect-ratio: 1672 / 941;
+  margin-inline: auto;
+  container-type: inline-size;
+  padding: 0 8px;
+  border: 1px solid #80503d;
+  border-radius: 14px;
+  background: #211020 url('launcher-assets/mars-title-sun.png') center / 100% 100% no-repeat;
+  image-rendering: pixelated;
+  box-shadow: 0 20px 55px #08060c80;
+}
+
+.launch-copy { text-align: center; padding-top: 5.25cqw; }
+.launch-eyebrow {
+  margin: 0 0 1.45cqw;
+  color: #ffc68f;
+  font: 700 clamp(.45rem, 1.25cqw, .83rem) var(--mono);
+  letter-spacing: .19em;
+}
+.launch-hero h1 {
+  font: 600 9cqw / .83 var(--launcher-pixel);
+  letter-spacing: .055em;
+  text-shadow: 0 .065em #84483c, 0 .102em #120a16;
+}
+.launch-hero h1 span { color: #ffbb81; }
+.launch-start {
+  display: inline-flex;
+  align-items: center;
+  gap: 1.2cqw;
+  margin-top: 3.2cqw;
+  padding: .48em .75em;
+  border: 2px solid #ffca9b;
+  background: #f5a875;
+  color: #281520;
+  box-shadow: 0 4px #8f4d3c, 0 7px #170e17;
+  font: 700 clamp(.65rem, 2.35cqw, 1.6rem) var(--launcher-pixel);
+}
+.launch-start:hover { background: #ffc38e; }
+.launch-start:active { translate: 0 3px; box-shadow: 0 1px #8f4d3c, 0 4px #170e17; }
+.launch-start span { font-size: .65em; }
+.launch-actions { display: inline-grid; justify-items: center; white-space: nowrap; }
+.launch-tasks-button {
+  display: flex;
+  justify-content: center;
+  width: 88%;
+  margin: 1.65cqw auto 0;
+  padding-block: .32em;
+  border-color: #f5a875;
+  background: #121012;
+  color: #ffb784;
+  box-shadow: 0 3px #170e17;
+  font-size: clamp(.65rem, 2.05cqw, 1.4rem);
+}
+.launch-tasks-button:is(:hover, :focus-visible) { background: #291916; }
+.launch-task-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 560px; }
+.launch-task-card { grid-template-rows: 1fr auto; }
+.launch-chapters { margin-top: 30px; scroll-margin-top: 20px; }
+.launch-chapters h2 { margin: 0 0 17px; font: 600 clamp(1.5rem, 2.8vw, 2.2rem) var(--launcher-pixel); }
+.launch-chapter-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 13px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.launch-chapter {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 9px;
+  height: 100%;
+  min-height: 117px;
+  padding: 14px;
+  border: 1px solid #68453f;
+  background: linear-gradient(145deg, #37222a, var(--launcher-ink));
+}
+a.launch-chapter:is(:hover, :focus-visible) { border-color: #ffb784; background: #422b2c; }
+div.launch-chapter { color: #c5acaa; }
+.launch-card-details {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 10px;
+  color: #e9ad9c;
+  font: 600 .64rem var(--mono);
+  text-transform: uppercase;
+}
+.launch-chapter strong { font: 600 clamp(1.1rem, 2vw, 1.45rem) / 1.1 var(--launcher-pixel); }
+.launch-card-arrow { justify-self: end; color: #ffac78; line-height: 1; }
+.launch-card-lock {
+  position: relative;
+  width: .85em;
+  height: .6em;
+  margin-top: .4em;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+}
+.launch-card-lock::before {
+  content: '';
+  position: absolute;
+  inset: -.45em 19% 100%;
+  border: 1px solid currentColor;
+  border-bottom: 0;
+  border-radius: .3em .3em 0 0;
+}
+.launch-return { display: inline-block; margin-bottom: 15px; color: var(--accent); font: 600 .75rem var(--mono); }
+.launch-return:hover { text-decoration: underline; }
+
+@media (max-width: 760px) {
+  .launch-chapter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 360" preserveAspectRatio="none">
+  <defs>
+    <radialGradient id="vapor">
+      <stop stop-color="#fff8e9"/>
+      <stop offset=".42" stop-color="#e2ece8" stop-opacity=".94"/>
+      <stop offset=".74" stop-color="#becfd1" stop-opacity=".57"/>
+      <stop offset="1" stop-color="#abc2cb" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="billow" x="-20%" y="-30%" width="140%" height="160%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency=".006 .016" numOctaves="4" seed="14" result="billows"/>
+      <feDisplacementMap in="SourceGraphic" in2="billows" scale="155" xChannelSelector="R" yChannelSelector="G"/>
+      <feGaussianBlur stdDeviation="1.8" result="cloud"/>
+      <feColorMatrix in="billows" type="matrix" values="0 0 0 0 .62  0 0 0 0 .74  0 0 0 0 .79  -.48 -.65 -.34 0 .95" result="shadow"/>
+      <feComposite in="shadow" in2="cloud" operator="in" result="shaded"/>
+      <feMerge><feMergeNode in="cloud"/><feMergeNode in="shaded"/></feMerge>
+    </filter>
+  </defs>
+  <g fill="url(#vapor)" filter="url(#billow)">
+    <ellipse cx="74" cy="121" rx="79" ry="40"/>
+    <ellipse cx="178" cy="130" rx="126" ry="64"/>
+    <ellipse cx="302" cy="142" rx="161" ry="107"/>
+    <ellipse cx="488" cy="132" rx="199" ry="120"/>
+    <ellipse cx="592" cy="196" rx="199" ry="132"/>
+    <ellipse cx="347" cy="216" rx="241" ry="121" opacity=".93"/>
+    <ellipse cx="471" cy="251" rx="258" ry="97"/>
+  </g>
+</svg>

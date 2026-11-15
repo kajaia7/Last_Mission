@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#110d0c">
+  <meta name="description" content="Walk the Mars outpost and explore the base, rocket, and rover.">
+  <title>Mission Trainer | Mars Outpost</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="rooms.css">
+  <link rel="stylesheet" href="intro.css">
+  <link rel="stylesheet" href="landing.css">
+  <link rel="stylesheet" href="mission-pc.css">
+  <link rel="stylesheet" href="cargo.css">
+  <link rel="stylesheet" href="airlock.css">
+  <link rel="stylesheet" href="rover-drive.css">
+  <link rel="preload" href="airlock-door.png" as="image">
+  <link rel="preload" href="airlock-chamber.png" as="image">
+  <link rel="preload" href="airlock-steam.png" as="image">
+  <script src="interiors.js" defer></script>
+  <script src="mission-pc.js" defer></script>
+  <script src="cargo.js" defer></script>
+  <script src="airlock-steam.js" defer></script>
+  <script src="rover-drive.js" defer></script>
+  <script src="app.js" defer></script>
+  <script src="intro.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="./index.html" aria-label="Mission Trainer home">
+        <span class="brand-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5.5"/><ellipse cx="12" cy="12" rx="11" ry="3.4" transform="rotate(-40 12 12)"/><path d="M17 2v4m-2-2h4"/></svg></span>
+        <span>MISSION <b>TRAINER</b></span>
+      </a>
+      <div class="mission-clock" id="outpost-clock" aria-label="Sol 1 of 90" hidden><span class="status-dot"></span><span>SOL <b>01</b> / 90</span></div>
+    </div>
+  </header>
+
+  <main id="mission-launcher">
+    <section id="launch-title-screen" class="launch-hero" aria-labelledby="launch-title">
+      <div class="launch-copy">
+        <p class="launch-eyebrow">90 SOLS ON MARS</p>
+        <h1 id="launch-title">MISSION<br><span>TRAINER</span></h1>
+        <div class="launch-actions">
+          <a class="launch-start" id="launch-start" href="#chapters"><span aria-hidden="true">▶</span> Start Mission</a>
+          <a class="launch-start launch-tasks-button" id="launch-tasks" href="#tasks">Tasks</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="chapters" class="launch-chapters" aria-labelledby="chapters-title" hidden>
+      <a class="launch-return" href="./index.html">← Title screen</a>
+      <h2 id="chapters-title" tabindex="-1">Choose your chapter</h2>
+      <ol class="launch-chapter-grid" id="launch-chapter-grid"></ol>
+    </section>
+    <section id="tasks" class="launch-chapters" aria-labelledby="tasks-title" hidden>
+      <a class="launch-return" href="#title">← Title screen</a>
+      <h2 id="tasks-title" tabindex="-1">Choose a task</h2>
+      <ul class="launch-chapter-grid launch-task-grid">
+        <li><a class="launch-chapter launch-task-card" href="tasks/water-filter-repair/index.html"><strong>Water Filter Repair</strong><span class="launch-card-arrow" aria-hidden="true">→</span></a></li>
+        <li><a class="launch-chapter launch-task-card" href="tasks/oxygen-rescue/index.html"><strong>Oxygen Rescue</strong><span class="launch-card-arrow" aria-hidden="true">→</span></a></li>
+        <li><a class="launch-chapter launch-task-card" href="tasks/solar-sweep/index.html"><strong>Solar Sweep</strong><span class="launch-card-arrow" aria-hidden="true">→</span></a></li>
+        <li><a class="launch-chapter launch-task-card" href="tasks/rock-detectives/index.html"><strong>Rock Detectives</strong><span class="launch-card-arrow" aria-hidden="true">→</span></a></li>
+      </ul>
+    </section>
+  </main>
+
+  <main id="outpost-game" hidden>
+    <section aria-labelledby="outpost-title">
+      <div class="intro">
+        <a class="launch-return" href="./index.html#chapters">← Chapters</a>
+        <p class="eyebrow">MARS SURFACE</p>
+        <h1 id="outpost-title">Mars Outpost</h1>
+        <p class="subtitle" id="instructions">
+          <span class="keyboard-help"><kbd>←</kbd> <kbd>→</kbd> Walk <span class="help-gap"></span><kbd>Shift</kbd> Sprint <span class="help-gap"></span><kbd>Space</kbd> Jump <span class="help-gap"></span><kbd>E</kbd> Interact <span class="help-gap"></span><kbd>Esc</kbd> Back</span>
+          <span class="touch-help">Use the arrows to walk, Jump to hop, and the action button to interact.</span>
+          <span id="base-help" hidden>Click equipment to interact. Press <kbd>Esc</kbd> to exit.</span>
+          <span id="subroom-help" hidden>Click equipment to interact. Press <kbd>Esc</kbd> to return to the lobby.</span>
+        </p>
+      </div>
+
+      <div class="scene-fit">
+      <div class="scene" id="scene" tabindex="0" aria-label="Mars Outpost game" aria-describedby="instructions">
+        <img id="terrain" class="terrain" src="mars-outpost-pixel.png" alt="The base, rocket, and rover on the Martian surface.">
+        <img id="base-interior" src="base-lobby-equipment.png" alt="White habitat lobby with Mars-facing windows, a mission PC, two server racks, suit gear, and a repair station." hidden>
+        <img class="vehicle-interior" id="rocket-interior" src="rocket-continuous-cutaway.png" alt="A rocket cutaway with a rounded nose and two decks connected by a ladder. The hull continues below the frame." hidden>
+        <img class="vehicle-interior" id="rover-interior" src="rover-complete-cutaway.png" alt="A pressurized rover cutaway with rear storage, a driving station, and three visible treaded wheels mounted to the chassis." hidden>
+        <div id="rocket-cargo" class="cargo-rocket" aria-hidden="true" hidden>
+          <span class="cargo-crate"></span><span class="cargo-crate"></span><span class="cargo-crate"></span>
+        </div>
+        <span id="astronaut" aria-hidden="true"></span>
+        <div id="base-hotspots" hidden>
+          <img class="base-alarm-light" src="base-alarm-beacon.png" alt="" draggable="false">
+          <button class="base-hotspot" data-base-target="systems" type="button"><span>System Room</span></button>
+          <button class="base-hotspot" data-base-target="servers-left" type="button"><span>Servers</span></button>
+          <button class="base-hotspot" data-base-target="pc" type="button" aria-controls="console" aria-expanded="false"><span>Mission PC</span></button>
+          <button class="base-hotspot" data-base-target="servers-right" type="button"><span>Servers</span></button>
+          <button class="base-hotspot" data-base-target="greenhouse" type="button"><span>Green House</span></button>
+        </div>
+        <section id="base-subroom" aria-label="Base room" hidden>
+          <div class="subroom-art" aria-hidden="true"></div>
+          <div class="subroom-controls">
+            <button class="subroom-control" type="button" data-subroom-action="crops">Crops</button>
+            <button class="subroom-control" type="button" data-subroom-action="water">Water</button>
+            <button class="subroom-control" type="button" data-subroom-action="oxygen">Oxygen</button>
+            <button class="subroom-control" type="button" data-subroom-action="energy">Energy</button>
+            <button class="subroom-control" type="button" data-subroom-action="radiation">Radiation</button>
+            <button class="subroom-control systems-pc" type="button" data-subroom-action="systems-pc" aria-controls="console" aria-expanded="false"><span>Systems PC</span></button>
+          </div>
+          <div class="warning-screen" data-warning-state="off" role="status"><span class="warning-caution">CAUTION</span><span class="warning-critical">WARNING</span></div>
+          <button class="subroom-back" id="subroom-back" type="button">Back to lobby</button>
+        </section>
+        <div id="stations" aria-hidden="true" hidden>
+          <span class="marker" data-station="base">Base</span>
+          <span class="marker" data-station="rocket">Rocket</span>
+          <span class="marker" data-station="rover">Rover</span>
+        </div>
+        <div id="base-cargo" hidden>
+          <button type="button" class="cargo-box" aria-label="Server block 1" aria-pressed="false"><span class="cargo-crate"></span></button>
+          <button type="button" class="cargo-box" aria-label="Server block 2" aria-pressed="false"><span class="cargo-crate"></span></button>
+          <button type="button" class="cargo-box" aria-label="Server block 3" aria-pressed="false"><span class="cargo-crate"></span></button>
+        </div>
+        <div id="cargo-bubble" class="cargo-bubble" role="status" hidden></div>
+        <div id="cargo-achievement" class="cargo-achievement" role="status" hidden>
+          <span class="cargo-achievement-icon" aria-hidden="true"><span class="cargo-crate"></span></span>
+          <div class="cargo-achievement-copy">
+            <span class="cargo-achievement-kicker">Achievement Unlocked</span>
+            <strong>Computer Set Up</strong>
+            <p>Deliver the Server Blocks and Activate the Mission Computer</p>
+          </div>
+        </div>
+        <div id="landing-achievement" class="cargo-achievement" role="status" hidden>
+          <span class="cargo-achievement-icon" aria-hidden="true"><img src="landing-rocket.png" alt=""></span>
+          <div class="cargo-achievement-copy">
+            <span class="cargo-achievement-kicker">Achievement Unlocked</span>
+            <strong>Perfect Landing</strong>
+            <p>You have arrived at your home for 90 sols.</p>
+          </div>
+        </div>
+        <section id="base-airlock" aria-label="Base airlock" hidden>
+          <img class="airlock-lobby" src="base-lobby-equipment.png" alt="">
+          <div class="airlock-chamber">
+            <div class="airlock-wall" aria-hidden="true"></div>
+            <div class="airlock-portal" aria-hidden="true">
+              <div class="airlock-door airlock-door-left"></div>
+              <div class="airlock-door airlock-door-right"></div>
+            </div>
+            <button type="button" class="airlock-lever" aria-label="Start air shower" aria-pressed="false">
+              <span class="airlock-lever-plate" aria-hidden="true">
+                <span class="airlock-handle"></span>
+                <span class="airlock-indicator"></span>
+              </span>
+            </button>
+          </div>
+          <div class="airlock-mist" aria-hidden="true">
+            <canvas class="airlock-steam"></canvas>
+          </div>
+          <div class="airlock-status" role="status"></div>
+        </section>
+        <div class="landing-sequence" id="landing-sequence" aria-hidden="true" hidden>
+          <div class="landing-terrain">
+            <img class="landing-backdrop" src="landing-outpost.png" alt="">
+            <div class="landing-craft">
+              <div class="landing-plume"><span class="landing-shock-diamonds"></span></div>
+              <div class="landing-jet landing-jet-upper-right"></div>
+              <div class="landing-jet landing-jet-lower-left"></div>
+              <div class="landing-jet landing-jet-upper-left"></div>
+              <div class="landing-jet landing-jet-lower-right"></div>
+              <img src="landing-rocket.png" alt="">
+            </div>
+            <img class="landing-backdrop landing-settled" src="mars-outpost-pixel.png" alt="">
+            <div class="landing-dust"></div>
+          </div>
+        </div>
+        <div class="landing-objective" id="landing-objective" role="status" hidden></div>
+        <div class="chapter-arrival-title" id="chapter-arrival-title" aria-hidden="true" hidden>
+          <span class="chapter-arrival-sol"></span>
+          <span class="chapter-arrival-name"></span>
+        </div>
+        <div class="chapter-arrival-announcement" id="chapter-arrival-announcement" role="status"></div>
+        <div class="interaction" id="interaction" role="status"></div>
+        <section class="console" id="base-panel" aria-labelledby="base-panel-title" hidden>
+          <div class="console-heading">
+            <div><h2 id="base-panel-title"></h2><p id="base-panel-text"></p></div>
+            <button type="button" id="close-base-panel" aria-label="Close base panel">×</button>
+          </div>
+        </section>
+        <div class="touch-controls">
+          <div>
+            <button type="button" data-move="-1" aria-label="Walk left">←</button>
+            <button type="button" data-move="1" aria-label="Walk right">→</button>
+          </div>
+          <div>
+            <button type="button" id="touch-jump">Jump</button>
+            <button type="button" id="touch-action">Interact</button>
+          </div>
+        </div>
+        <section id="rover-drive" class="rover-drive" tabindex="-1" aria-label="Rover driving" hidden>
+          <canvas width="1440" height="600" aria-hidden="true"></canvas>
+          <p class="rover-objective" role="status">Find the lost research bot.</p>
+          <span class="marker research-station-marker" hidden>Research Station</span>
+          <div class="rover-controls" aria-label="Rover controls">
+            <button type="button" data-drive-direction="-1"><kbd>S</kbd> <span>Reverse</span></button>
+            <button type="button" data-drive-direction="1"><kbd>W</kbd> <span>Forward</span></button>
+            <button type="button" id="rover-site-action" hidden></button>
+            <button type="button" class="park-rover">Exit drive</button>
+          </div>
+        </section>
+        <div id="rover-fade" class="rover-fade" aria-hidden="true" hidden></div>
+      </div>
+      </div>
+    </section>
+  </main>
+  <iframe id="research-task" class="research-task" title="Rock Detectives at the Research Station" hidden></iframe>
+  <section class="mission-pc" id="console" role="dialog" aria-modal="true" aria-labelledby="console-title" hidden>
+    <div class="mission-pc-shell">
+      <header class="console-header">
+        <div>
+          <h2 id="console-title">Mission PC</h2>
+          <p>Chapter 1 · A Place to Live</p>
+        </div>
+        <div class="head-tools">
+          <div class="sol-chip">Sol <strong id="sol">01</strong></div>
+          <button type="button" class="secondary" id="close-console" aria-label="Close Mission PC">Close</button>
+        </div>
+      </header>
+      <div class="tiles" id="tiles" role="group" aria-label="Base readings"></div>
+      <div class="workspace">
+        <section class="detail" id="detail" aria-labelledby="detail-title">
+          <div>
+            <h3 id="detail-title"></h3>
+            <p class="detail-copy" id="detail-copy"></p>
+          </div>
+          <div class="instrument" aria-hidden="true">
+            <span class="instrument-label" id="instrument-label"></span>
+            <strong id="instrument-value"></strong>
+            <div class="meter" id="meter"></div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </section>
+</body>
+</html>

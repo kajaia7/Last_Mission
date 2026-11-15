@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Water Filter Repair | Mission Trainer</title>
+  <link rel="stylesheet" href="../task-frame.css">
+  <link rel="stylesheet" href="station.css">
+  <script src="game.js" defer></script>
+</head>
+<body>
+<main class="bay task-frame">
+  <header class="header">
+    <div class="task-title-panel">
+      <h1>Water Filter Repair</h1>
+      <p class="task-description">Replace the worn filter to restore clean water.</p>
+    </div>
+    <section class="water-reserve task-instrument" aria-label="Base water reserve">
+      <div class="water-readout">
+        <span class="water-title">BASE WATER</span><strong id="water-label" class="task-readout">LOW</strong>
+      </div>
+      <div id="water-meter" class="water-meter task-meter" role="progressbar" aria-label="Water reserve" aria-valuemin="0" aria-valuemax="100" aria-valuenow="58"><span id="water-fill"></span></div>
+      <p id="water-note" role="status">Water reserve is dropping.</p>
+    </section>
+  </header>
+  <ol class="steps" aria-label="Repair progress"><li>Isolate</li><li>Open</li><li>Swap</li><li>Test</li></ol>
+  <div class="viewport">
+    <canvas id="workbench" width="960" height="530" tabindex="0" aria-label="Water recycler repair bench" aria-describedby="line input-hint">This game requires a browser with Canvas support.</canvas>
+  </div>
+  <aside class="coach" aria-labelledby="coach-name">
+    <div id="coach-speech" class="coach-speech">
+      <h2 id="coach-name">Dr. Ian</h2>
+      <p id="line" role="status"></p>
+      <small id="input-hint"></small>
+    </div>
+    <img src="dr-ian.png" width="1312" height="1190" alt="">
+  </aside>
+  <section id="repair-complete" class="task-completion" role="dialog" aria-modal="true" aria-labelledby="complete-title" aria-describedby="complete-copy" hidden>
+    <div class="completion-effects" aria-hidden="true"></div>
+    <p class="completion-kicker">MISSION COMPLETE</p>
+    <div class="completion-medal" aria-hidden="true">✦</div>
+    <h2 id="complete-title">Clean water restored!</h2>
+    <p id="complete-copy" class="completion-copy">The new filter is working. The crew has clean water again!</p>
+    <a id="continue-tasks" class="completion-link completion-continue" href="../../index.html#tasks" aria-label="Continue to Tasks">Continue <span aria-hidden="true">→</span></a>
+  </section>
+</main>
+</body>
+</html>
+
+

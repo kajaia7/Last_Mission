@@ -1,0 +1,85 @@
+.rover-drive, .rover-fade {
+  position: absolute;
+  inset: 0;
+}
+
+.rover-drive {
+  z-index: 5;
+  background: #bc5849;
+}
+
+.rover-drive canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+.rover-objective, .rover-controls button {
+  border: 1px solid #f5cab55c;
+  border-radius: 5px;
+  background: #221c2af2;
+  color: #fff1e9;
+  font: 600 clamp(.61rem, 1.2vw, .81rem) var(--mono);
+}
+
+.rover-objective {
+  position: absolute;
+  top: 4%;
+  left: 2%;
+  max-width: 87%;
+  margin: 0;
+  padding: .45em .65em;
+  border-left: 2px solid #f6a770;
+}
+
+.rover-controls {
+  position: absolute;
+  right: 2%;
+  bottom: 4%;
+  left: 2%;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.rover-controls button {
+  padding: .45em .65em;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.rover-controls button:is(:hover, :focus-visible) { border-color: #ffb675; }
+.rover-controls button:disabled { opacity: .65; cursor: default; }
+.rover-controls kbd { padding-inline: 3px; }
+.rover-fade { z-index: 6; background: #000; }
+
+.research-station-marker {
+  --y: max(9%, 22px);
+  border-color: #9ae3e1a0;
+  background: #183039f2;
+  color: #c6faf1;
+}
+
+#rover-site-action {
+  border-color: #9ae3e1a0;
+  background: #183039f2;
+  color: #c6faf1;
+}
+
+#rover-site-action:is(:hover, :focus-visible) { border-color: #c6faf1; }
+
+@media (max-width: 620px) {
+  .rover-drive:has(.research-station-marker:not([hidden])) .rover-objective { max-width: 56%; }
+}
+
+.research-task {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #110d0c;
+}

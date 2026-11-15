@@ -1,0 +1,100 @@
+.base-alarm-light {
+  position: absolute;
+  top: 8%;
+  left: 50%;
+  width: 2.8%;
+  height: auto;
+  transform: translateX(-50%);
+  image-rendering: pixelated;
+}
+
+#base-subroom .subroom-art {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: #b6a18c center / 100% 100% no-repeat;
+  image-rendering: pixelated;
+}
+
+#base-subroom[data-room='greenhouse'] .subroom-art {
+  background-image: url('greenhouse-compact.png');
+}
+
+#base-subroom[data-room='systems'] .subroom-art {
+  background-image: url('systems-workstations.png');
+}
+#base-subroom { position: absolute; inset: 0; }
+.subroom-control, .subroom-back {
+  position: absolute;
+  z-index: 1;
+  padding: .35em .55em;
+  border: 1px solid #d8b397ad;
+  border-radius: 4px;
+  background: #211611f5;
+  color: #ffe8d8;
+  font: 600 clamp(.57rem, 1.1vw, .76rem) var(--mono);
+}
+.subroom-control { top: 76%; left: var(--x); transform: translateX(-50%); }
+.subroom-control:hover, .subroom-control:focus-visible,
+.subroom-back:hover, .subroom-back:focus-visible {
+  background: var(--accent);
+  color: #28150e;
+}
+.subroom-back { top: 3%; right: 1.5%; }
+[data-subroom-action='crops'], [data-subroom-action='energy'] { --x: 36%; }
+[data-subroom-action='water'] { --x: 69%; }
+[data-subroom-action='oxygen'] { --x: 85%; }
+[data-subroom-action='radiation'] { --x: 62%; }
+
+
+.subroom-control.systems-pc {
+  top: 41%;
+  left: 0;
+  width: 9%;
+  height: 47%;
+  padding: 0;
+  transform: none;
+  border-color: transparent;
+  background: transparent;
+}
+.systems-pc span {
+  position: absolute;
+  bottom: 7%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: .35em;
+  border: 1px solid #d8b397ad;
+  border-radius: 4px;
+  background: #211611f5;
+  white-space: nowrap;
+}
+.subroom-control.systems-pc:is(:hover, :focus-visible) { background: transparent; }
+.systems-pc:is(:hover, :focus-visible) span { background: var(--accent); color: #28150e; }
+
+.warning-screen {
+  position: absolute;
+  inset: 42% .8% 38% 92%;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 3%;
+  pointer-events: none;
+  font: 700 clamp(.4rem, .8vw, .68rem) var(--mono);
+}
+#base-subroom:not([data-room='systems']) .warning-screen,
+.warning-screen span { display: none; }
+.warning-screen:is([data-warning-state='yellow'], [data-warning-state='red'])::before {
+  content: '!';
+  display: grid;
+  place-items: end center;
+  width: 45%;
+  aspect-ratio: 1.16;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  background: var(--warning-color);
+  color: #170f0f;
+  font-size: 1.7em;
+}
+.warning-screen[data-warning-state='yellow'] { --warning-color: #ffcf53; color: var(--warning-color); }
+.warning-screen[data-warning-state='red'] { --warning-color: #ff625d; color: var(--warning-color); }
+.warning-screen[data-warning-state='yellow'] .warning-caution,
+.warning-screen[data-warning-state='red'] .warning-critical { display: inline; }

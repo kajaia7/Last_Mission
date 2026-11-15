@@ -1,0 +1,232 @@
+#base-airlock {
+  --airlock-entry-time: 1.75s;
+  --airlock-lamp: #ffc171;
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  container-type: size;
+  overflow: hidden;
+  isolation: isolate;
+  background: #30242a;
+  color: #fff0db;
+  font-family: 'Pixelify Sans', var(--mono);
+}
+
+.airlock-lobby,
+.airlock-chamber,
+.airlock-wall {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.airlock-lobby {
+  image-rendering: pixelated;
+  transform: scale(.64);
+}
+
+.airlock-chamber {
+  transform-origin: 50% 51.5%;
+}
+
+.airlock-wall {
+  z-index: 1;
+  background: url('airlock-chamber.png') center / 100% 100% no-repeat;
+  image-rendering: pixelated;
+  /* The cutout follows the inside edge of the jamb in the chamber artwork. */
+  clip-path: polygon(evenodd, 0 0, 100% 0, 100% 100%, 0 100%, 0 0,
+    35.4% 26.3%, 64.6% 26.3%, 66.8% 31.3%, 66.8% 73.6%, 64.9% 78%,
+    35.1% 78%, 33.2% 73.6%, 33.2% 31.3%, 35.4% 26.3%);
+}
+
+.airlock-portal {
+  position: absolute;
+  inset: 26% 33% 21.7%;
+  overflow: hidden;
+}
+
+.airlock-door {
+  position: absolute;
+  inset-block: 0;
+  width: 50%;
+  background: url('airlock-door.png') var(--door-art-edge) center / 200% 100% no-repeat;
+}
+
+.airlock-door-left {
+  left: 0;
+  --door-slide: -101%;
+  --door-art-edge: left;
+}
+
+.airlock-door-right {
+  right: 0;
+  --door-slide: 101%;
+  --door-art-edge: right;
+}
+
+.airlock-lever {
+  position: absolute;
+  z-index: 2;
+  top: 53.3%;
+  left: 28.2%;
+  width: 5.2%;
+  height: 20.8%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  transform: translate(-50%, -50%);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.airlock-lever::before {
+  content: '';
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: max(100%, 44px);
+  height: max(100%, 44px);
+  translate: -50% -50%;
+}
+
+.airlock-lever:focus-visible {
+  outline: 2px solid #fff0ae;
+  outline-offset: 3px;
+}
+
+.airlock-lever[data-dragging] { cursor: grabbing; }
+.airlock-lever[aria-pressed='true'] { cursor: default; }
+
+.airlock-lever-plate {
+  position: absolute;
+  inset: 3% 4%;
+  border: 1px solid #613d2c;
+  border-radius: 14% 14% 9% 9%;
+  background:
+    radial-gradient(circle, #eabf94 17%, #6f4936 32%, transparent 43%) 5% 4% / 14% 10% no-repeat,
+    radial-gradient(circle, #eabf94 17%, #6f4936 32%, transparent 43%) 95% 4% / 14% 10% no-repeat,
+    linear-gradient(90deg, #98664a, #392820 19% 51%, #664536 65%, #dca479) 34% 30% / 11% 71% no-repeat,
+    linear-gradient(90deg, #98664a, #392820 19% 51%, #664536 65%, #dca479) 66% 30% / 11% 71% no-repeat,
+    linear-gradient(105deg, #a37559, #eed0a9 14% 75%, #ae7a58);
+  box-shadow: inset 0 1px 1px #ffe0bd, inset 0 -3px #9b674d, 1px 2px 2px #4a302699;
+  pointer-events: none;
+}
+
+.airlock-indicator {
+  position: absolute;
+  inset: auto 36% 7%;
+  height: 8%;
+  border-radius: 25%;
+  border: 1px solid #584131;
+  background: var(--airlock-lamp);
+  box-shadow: 0 0 .8cqh var(--airlock-lamp);
+}
+
+.airlock-handle {
+  position: absolute;
+  inset: 11% -26% auto;
+  height: 39.1%;
+  background: url('airlock-lever.png') center / 100% auto no-repeat;
+  filter: drop-shadow(0 2px 1px #472619a8);
+  transform: translateY(var(--lever-drag, 0px));
+  transition: transform .18s ease-out;
+}
+
+.airlock-lever[aria-pressed='false']:hover .airlock-handle { filter: drop-shadow(0 2px 1px #472619a8) brightness(1.12); }
+.airlock-lever[data-dragging] .airlock-handle { transition: none; }
+.airlock-lever[aria-pressed='true'] .airlock-handle { transform: translateY(100%); }
+
+.airlock-mist {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.airlock-steam {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.airlock-status {
+  position: absolute;
+  z-index: 5;
+  left: 50%;
+  bottom: 4%;
+  width: max-content;
+  max-width: 92%;
+  padding: .32em .72em;
+  border: 1px solid #dfb690;
+  border-radius: 3px;
+  background: #2e2326f5;
+  box-shadow: 2px 3px #421f2790;
+  color: #ffe8cc;
+  font: 600 clamp(.63rem, 3.7cqh, 1.18rem) / 1.1 'Pixelify Sans', var(--mono);
+  text-align: center;
+  translate: -50% 0;
+}
+
+.airlock-status::before {
+  content: '';
+  display: inline-block;
+  width: .45em;
+  height: .45em;
+  margin: 0 .45em .12em 0;
+  background: var(--airlock-lamp);
+  box-shadow: 0 0 .4em var(--airlock-lamp);
+}
+
+#base-airlock[data-phase='spraying'] { --airlock-lamp: #ffab48; }
+
+#base-airlock[data-phase='opening'] { --airlock-lamp: #aaf3b2; }
+
+#base-airlock[data-phase='opening'] .airlock-door {
+  animation: airlock-slide .76s .13s cubic-bezier(.52, .02, .28, 1) both;
+}
+
+#base-airlock[data-phase='opening'] .airlock-chamber {
+  animation: airlock-approach var(--airlock-entry-time) both;
+}
+
+#base-airlock[data-phase='opening'] .airlock-lobby {
+  animation: airlock-arrive var(--airlock-entry-time) both;
+}
+
+#base-airlock[data-phase='opening'] .airlock-status {
+  animation: airlock-status-away var(--airlock-entry-time) both;
+}
+
+@keyframes airlock-slide { to { transform: translateX(var(--door-slide)); } }
+@keyframes airlock-approach {
+  0%, 37% { transform: scale(1); animation-timing-function: cubic-bezier(.55, .05, .44, 1); }
+  100% { transform: scale(3.3); }
+}
+
+@keyframes airlock-arrive {
+  0%, 37% { transform: scale(.64); animation-timing-function: cubic-bezier(.4, .03, .18, 1); }
+  63%, 100% { transform: none; }
+}
+
+@keyframes airlock-status-away {
+  0%, 40% { opacity: 1; }
+  66%, 100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .airlock-lobby { transform: none; }
+  .airlock-handle { transition: none; }
+  #base-airlock[data-phase='spraying'] .airlock-mist {
+    background: radial-gradient(ellipse at 50% 74%, #ede7dad1, #dbe4e655 46%, transparent 72%);
+  }
+  #base-airlock[data-phase='opening'] {
+    --airlock-entry-time: .28s;
+  }
+  #base-airlock[data-phase='opening'] .airlock-chamber { animation-name: airlock-dissolve; }
+  #base-airlock[data-phase='opening'] .airlock-lobby { animation: none; }
+  #base-airlock[data-phase='opening'] .airlock-door { animation: none; transform: translateX(var(--door-slide)); }
+}
+
+@keyframes airlock-dissolve { to { opacity: 0; } }

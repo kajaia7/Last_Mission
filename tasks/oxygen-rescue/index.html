@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#392731"><meta name="description" content="Find a hidden air leak, place a repair patch, and bring the cabin air back. An independent Mars mini-game for ages 7–12."><title>Oxygen Rescue · Find the Leak</title><link rel="icon" href="./assets/favicon.svg"><link rel="preload" href="./assets/pixelify-sans.ttf" as="font" type="font/ttf" crossorigin><link rel="preload" href="./assets/oxygen-bay.png" as="image"><link rel="stylesheet" href="./styles.css"><link rel="stylesheet" href="../task-frame.css"><script defer src="./game.js"></script></head>
+<body><a class="skip" href="#joints">Skip to the pipe joints</a>
+<main id="game" class="game task-frame" data-phase="search" aria-label="Oxygen Rescue game">
+ <div class="mission-hud">
+ <header class="mission-heading task-title-panel">
+  <h1>Oxygen Rescue</h1>
+  <p id="instruction" class="task-description">Find the leak in the air pipes.</p>
+  <p id="status" class="status" role="status" aria-live="polite"></p>
+ </header>
+ <nav class="steps" aria-label="Mission steps"><span id="step-find" class="step active" aria-current="step"><i>1</i> FIND</span><span id="step-seal" class="step"><i>2</i> SEAL</span><span id="step-test" class="step"><i>3</i> CHECK</span></nav>
+ <section class="pressure task-instrument" aria-label="Cabin air"><div class="pressure-top"><span>CABIN AIR</span><strong id="pressure-label" class="task-readout">LOW</strong></div><div id="pressure-meter" class="pressure-meter task-meter" role="progressbar" aria-label="Relative cabin air level" aria-describedby="pressure-note" aria-valuemin="0" aria-valuemax="100" aria-valuenow="58"><span id="pressure-fill"></span></div><p id="pressure-note">Cabin air is leaking.</p></section>
+ </div>
+ <div class="service-bay">
+  <div id="stage" class="stage" aria-label="Mars habitat oxygen service bay"><img class="bay-art" src="./assets/oxygen-bay.png" alt="A cream-and-orange Mars service bay with oxygen tanks, pipework and six bolted joints" draggable="false"><div class="light" aria-hidden="true"></div><div id="joints" class="joints" tabindex="-1" aria-label="Six pipe joints. Move the scanner or use Tab and Enter to inspect each one."></div><div id="scan-cursor" class="scan-cursor" aria-hidden="true" hidden></div></div>
+ </div>
+ <div class="bay-controls">
+ <div class="repair-controls">
+ <aside id="scanner" class="scanner" aria-label="Leak scanner"><div class="scanner-title"><span class="scanner-dot"></span> LEAK SCANNER <span id="scanner-reading">READY</span></div><div class="scanner-screen"><svg class="scanner-glyph" viewBox="0 0 36 30" aria-hidden="true"><path d="M2 20h6l4-12 7 20 5-15 4 7h6" fill="none" stroke="currentColor" stroke-width="3"/></svg><div id="signal-bars" class="signal-bars" role="progressbar" aria-label="Leak signal strength" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div></div><p id="scanner-copy">Move over the pipes. A stronger signal means closer.</p></aside>
+ <aside id="patch-kit" class="patch-kit" aria-label="Repair kit" hidden><p class="kit-label">REPAIR KIT</p><button id="take-patch" class="take-patch" aria-label="Pick up repair patch"><span class="patch-picture" aria-hidden="true"></span><span id="patch-button-label">PICK UP PATCH</span></button><p id="patch-instruction">Drag to the leak, or tap patch then leak.</p></aside>
+ <button id="test-repair" class="primary" hidden>TEST THE REPAIR <span aria-hidden="true">→</span></button>
+ </div>
+ <aside id="coach" class="coach speaking" aria-label="Dr. Ian, mission coach">
+  <div id="coach-speech" class="speech"><h2>Dr. Ian</h2><button id="close-speech" class="close-speech" aria-label="Close coach message">×</button><p id="coach-copy" aria-live="polite">The cabin has a small air leak. Move your scanner around the pipe joints. Let’s find it!</p><button id="hint" class="hint">A LITTLE HELP?</button></div>
+  <button id="coach-toggle" class="coach-toggle" aria-label="Open or close Dr. Ian’s message" aria-controls="coach-speech" aria-expanded="true"><img src="../water-filter-repair/dr-ian.png" width="1312" height="1190" alt="Dr. Ian in his astronaut suit" draggable="false"></button>
+ </aside>
+ </div>
+ <div id="drag-patch" class="drag-patch" aria-hidden="true" hidden><span class="patch-picture"></span></div>
+ <section id="success" class="task-completion" aria-labelledby="success-title" hidden>
+  <div id="effects" class="completion-effects" aria-hidden="true"></div>
+  <p class="completion-kicker">MISSION COMPLETE</p><div class="completion-medal" aria-hidden="true">✦</div>
+  <h2 id="success-title">A breath of fresh air!</h2><p class="completion-copy">The leak is sealed. Your crew is ready for the next adventure.</p>
+  <a id="return-tasks" class="completion-link" href="../../index.html#tasks">← Back to Tasks</a>
+ </section>
+
+<div class="sr-only" id="announcer" aria-live="polite"></div>
+</main>
+</body></html>
+
+
+

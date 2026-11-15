@@ -1,0 +1,141 @@
+/* Match the main outpost scene without changing the coordinate space of pointer effects. */
+body {
+  --task-gutter: clamp(8px, 2.5vw, 28px);
+  --instrument-surface: #59414b;
+  --instrument-highlight: #70524f;
+  background: radial-gradient(ellipse at 50% 4%, #241816, #110d0c 65%);
+}
+
+.task-frame {
+  border: 1px solid #754b3d;
+  border-radius: var(--task-radius, 15px);
+  box-shadow: 0 12px 35px #0005;
+  overflow: hidden;
+}
+
+.game.task-frame {
+  inset: var(--task-gutter) max(var(--task-gutter), calc((100% - 1440px) / 2));
+  clip-path: inset(0 round var(--task-radius, 15px));
+}
+
+.bay.task-frame {
+  min-height: calc(100svh - 2 * var(--task-gutter));
+}
+
+.task-frame :is(.task-title-panel, .task-instrument) {
+  border: 2px solid #edcba0;
+  border-radius: 0;
+  background: #382833ef;
+  box-shadow: 3px 3px #432a36;
+  color: #fff0d2;
+  font-family: Pixelify, 'Pixelify Sans', monospace;
+  text-shadow: none;
+}
+
+.task-title-panel {
+  max-width: 100%;
+  padding: clamp(5px, 1.1vmin, 11px) clamp(7px, 1.5vmin, 15px);
+}
+
+.task-frame .task-title-panel h1 {
+  font-family: inherit;
+  letter-spacing: normal;
+  text-shadow: 2px 3px #81504a;
+}
+
+.task-title-panel .task-description {
+  margin: .28em 0 0;
+  color: #ffe0b8;
+  font-size: clamp(10px, 1.3vmin, 14px);
+  line-height: 1.2;
+}
+
+.task-frame .task-instrument .task-readout {
+  color: var(--task-readout-color, #ffc779);
+  letter-spacing: .04em;
+}
+
+.task-frame .task-instrument .task-meter {
+  border: 1px solid #ad8066;
+  border-radius: 0;
+  background: #271e2b;
+}
+
+.task-return {
+  color: #ffdbab;
+  padding: 8px;
+  text-underline-offset: 3px;
+}
+
+.task-completion {
+  position: absolute;
+  z-index: 18;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: #30222dbb;
+  text-align: center;
+  backdrop-filter: blur(3px);
+}
+
+.task-completion > :not(.completion-effects) { position: relative; max-width: 570px; }
+.completion-kicker { margin: 0; color: #ffcb76; font-size: 16px; letter-spacing: .15em; }
+.task-completion h2 {
+  margin: 6px 0;
+  color: #fff0d1;
+  font-size: clamp(30px, 5vw, 62px);
+  line-height: 1.05;
+  text-shadow: 3px 4px #78474d;
+}
+.completion-copy { margin: 7px 0 20px; color: #ffe0b7; font-size: clamp(17px, 2vw, 23px); }
+.completion-link { margin-top: 15px; color: #ffcb9c; font-size: 14px; text-underline-offset: 3px; }
+.completion-medal {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 80px;
+  height: 80px;
+  margin: 16px auto 10px;
+  border: 7px double #ffe2a1;
+  border-radius: 50%;
+  background: #d68a4c;
+  box-shadow: 0 0 0 6px #68414a, 0 0 25px #ffc874;
+  color: #fff3c5;
+  font-size: 47px;
+  animation: task-medal-pulse 1.4s ease-in-out infinite alternate;
+}
+
+.completion-effects { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.completion-effects i {
+  position: absolute;
+  top: -18px;
+  left: var(--x);
+  width: 9px;
+  height: 14px;
+  background: #f5d273;
+  animation: task-confetti-fall 3s var(--delay) ease-in forwards;
+}
+.completion-effects i:nth-child(3n + 1) { background: #65d6d2; }
+.completion-effects i:nth-child(3n + 2) { background: #f39462; }
+@keyframes task-medal-pulse { to { transform: scale(1.07) rotate(7deg); } }
+@keyframes task-confetti-fall { to { transform: translateY(110vh) rotate(420deg); opacity: .25; } }
+@media (prefers-reduced-motion: reduce) {
+  .completion-effects { display: none; }
+  .completion-medal { animation: none; }
+}
+
+@media (max-width: 620px), (max-height: 480px) {
+  .task-completion { padding: 16px; }
+  .completion-kicker { font-size: 12px; }
+  .completion-medal { width: 60px; height: 60px; border-width: 5px; font-size: 34px; }
+  .task-completion h2 { font-size: clamp(29px, 8vw, 46px); }
+  .completion-copy { margin-bottom: 10px; font-size: 16px; }
+  .completion-link { margin-top: 9px; }
+}
+
+@media (max-width: 620px) {
+  .task-frame { --task-radius: 10px; }
+}
