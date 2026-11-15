@@ -45,6 +45,8 @@
       const nameStart = sol.length * characterDelay + lineDelay;
       const solCount = reducedMotion ? sol.length : Math.min(sol.length, 1 + Math.floor(elapsed / characterDelay));
       const nameCount = reducedMotion ? title.length : Math.min(title.length, Math.max(0, 1 + Math.floor((elapsed - nameStart) / characterDelay)));
+      // Typewriter tick for each new letter.
+      if (solCount + nameCount > arrivalSol.textContent.length + arrivalName.textContent.length) SFX.play('type');
       arrivalSol.textContent = sol.slice(0, solCount);
       arrivalName.textContent = title.slice(0, nameCount);
       if (nameCount === title.length) {
@@ -122,6 +124,26 @@
       focusTarget.focus({ preventScroll: true });
     }
   }
+
+  // Menu sounds: start button, chapter cards, task cards, back links.
+  launcher.addEventListener('click', event => {
+    const target = event.target.closest('a, .launch-chapter');
+    if (!target) return;
+    if (!target.matches('a')) {
+      SFX.play('denied');
+      return;
+    }
+    if (target.classList.contains('launch-return')) {
+      SFX.play('back');
+      return;
+    }
+    SFX.play('select');
+    // Task cards load a new page, so give the sound a moment before leaving.
+    if (target.classList.contains('launch-task-card') && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+      event.preventDefault();
+      setTimeout(() => { location.href = target.href; }, 160);
+    }
+  });
 
   window.addEventListener('hashchange', () => showRoute(true));
   window.addEventListener('keydown', event => {

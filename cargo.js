@@ -70,9 +70,11 @@ const cargoSetup = (() => {
     racks[rackIndex].append(module);
     boxes[index].hidden = true;
     highlight(null);
+    SFX.play('install');
     if (usedBoxes.size === boxes.length) {
       phase = 'complete';
       achievement.hidden = false;
+      setTimeout(() => SFX.play('achievement'), 350);
       window.setTimeout(() => { achievement.hidden = true; }, 6500);
     }
     render('base', false, true);
@@ -85,6 +87,7 @@ const cargoSetup = (() => {
     let moved = false;
     box.addEventListener('click', event => {
       if (moved && event.detail) return;
+      SFX.play(selected === index ? 'back' : 'pickup');
       highlight(selected === index ? null : index);
       render('base', false, true);
     });
@@ -98,6 +101,7 @@ const cargoSetup = (() => {
       const dx = event.clientX - pointer.x;
       const dy = event.clientY - pointer.y;
       if (!moved && Math.hypot(dx, dy) < 6) return;
+      if (!moved) SFX.play('pickup');
       moved = true;
       box.classList.add('cargo-dragging');
       box.style.translate = dx + 'px ' + dy + 'px';
@@ -113,7 +117,7 @@ const cargoSetup = (() => {
         const rack = document.elementsFromPoint(event.clientX, event.clientY)
           .map(element => element.closest('[data-base-target^="servers-"]'))
           .find(Boolean);
-        install(index, racks.indexOf(rack));
+        if (!install(index, racks.indexOf(rack))) SFX.play('drop');
       }
       resetDrag();
     });

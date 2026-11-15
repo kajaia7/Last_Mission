@@ -232,6 +232,7 @@ class DustLayer {
 
 const $=id=>document.getElementById(id);
 const game=$('game'),panel=$('panel'),surface=$('surface'),cells=$('cells'),dustCanvas=$('dust'),brush=$('brush');
+let lastSweep=0;
 let dust,lastQuarter=-1,pointer={x:0,y:0},keyboardPoint={u:.5,v:.5};
 const particles=[];
 const fx=$('dust-puffs'),fxCtx=fx.getContext('2d');
@@ -273,12 +274,13 @@ function updateProgress(value){
  $('percent').textContent=value+'%';$('progress-fill').style.width=value+'%';$('clean-meter').setAttribute('aria-valuenow',String(value));
  $('clean-meter').setAttribute('aria-valuetext',value+' percent of the panel cleaned');
  $('progress-note').textContent=value===100?'Sunlight is reaching every cell.':value>=85?'Almost there. Sweep along the edges.':value>=50?'Keep sweeping. More sunlight is getting through!':value>=20?'The blue cells are coming back!':'Let the sunlight reach the cells.';
- const quarter=Math.floor(value/25);if(quarter>lastQuarter){lastQuarter=quarter;$('announcer').textContent=value===100?'Powers restored. Dr. Ian is back online.':value+' percent cleaned.';}
+ const quarter=Math.floor(value/25);if(quarter>lastQuarter){if(lastQuarter>=0&&value<100)SFX.play('blip',{pitch:1+quarter*.25});lastQuarter=quarter;$('announcer').textContent=value===100?'Powers restored. Dr. Ian is back online.':value+' percent cleaned.';}
 }
 function setCoachOnline(online){
  $('coach').setAttribute('aria-label',online?'Dr. Ian is back online. Communications restored.':'Dr. Ian is not responding. Communications are offline.');$('coach-status').textContent=online?'CONNECTED':'NOT RESPONDING';$('link-copy').textContent=online?'Connection restored':'Connection lost';$('link-mark').textContent=online?'✓':'×';$('coach-image').alt=online?'Dr. Ian, your astronaut trainer, back online':"Dr. Ian's astronaut portrait tinted red";
 }
 function restored(){
+ SFX.play('powerUp');setTimeout(()=>SFX.play('win'),700);
  game.classList.add('power-restored');panel.inert=true;$('panel').setAttribute('aria-label','Clean solar panel. Power restored.');$('title').textContent='Powers restored';$('power-copy').textContent='POWER FLOWING';$('win-screen').hidden=false;setCoachOnline(true);hideBrush();$('return-tasks').focus({preventScroll:true});
  for(let i=0;i<35;i++){const p=screenPoint(Math.random(),Math.random());particles.push({x:p.x,y:p.y,vx:rand(-12,12),vy:rand(-55,-15),size:rand(2,4),life:rand(.5,1.1),ttl:1.1,color:i%2?'#f8da88':'#b6ddb0'});}
 }
@@ -294,6 +296,8 @@ function moveBrush(event){
  if(event.pointerType==='touch'&&event.buttons===0)return;
  const point=panelPoint(event.clientX,event.clientY),tilt=(event.clientX-pointer.x)*.5;
  showBrush(event.clientX,event.clientY,tilt);keyboardPoint=point;dust.wipe(point.u,point.v);
+ // Brushing makes a soft scratchy sweep while the brush is moving fast enough.
+ if(!dust.complete&&Math.abs(tilt)>1.5&&performance.now()-lastSweep>90){lastSweep=performance.now();SFX.play('sweep');}
  if(event.pointerType==='touch')event.preventDefault();
 }
 surface.addEventListener('pointerenter',event=>{dust.breakStroke();if(event.pointerType!=='touch')moveBrush(event);});

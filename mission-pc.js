@@ -86,6 +86,7 @@
     bar.setAttribute("aria-hidden", "true");
     root.append(icon, name, value, note, bar);
     root.addEventListener("click", () => {
+      SFX.play("blip", { pitch: status(key)[1] === "red" ? 0.6 : 1 });
       selected = key;
       render();
     });
