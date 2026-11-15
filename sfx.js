@@ -238,6 +238,10 @@ const SFX = (() => {
 
     // ---- Rocket and rover ----
     brake: () => noise({ dur: 0.5, gain: 0.12, filter: 'lowpass', freq: 1400, to: 300 }),
+    reverseAlert: () => {
+      tone({ type: 'triangle', freq: 760, dur: 0.16, gain: 0.19, attack: 0.01 });
+      tone({ type: 'sine', freq: 1520, dur: 0.12, gain: 0.045, attack: 0.01 });
+    },
     chime: () => notes([784, 988, 1175], { type: 'sine', dur: 0.4, gain: 0.12, gap: 0.12 }),
 
     // ---- Mission tasks ----
@@ -294,22 +298,56 @@ const SFX = (() => {
       return { amp, max: 0.22, nodes: [src] };
     },
     engine: () => {
-      const motor = ctx.createOscillator(); motor.type = 'sawtooth'; motor.frequency.value = 55;
-      const whine = ctx.createOscillator(); whine.type = 'sine'; whine.frequency.value = 300;
-      const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 400;
-      const whineGain = ctx.createGain(); whineGain.gain.value = 0.15;
-      const amp = ctx.createGain(); amp.gain.value = 0;
-      motor.connect(f);
-      whine.connect(whineGain).connect(f);
-      f.connect(amp).connect(master);
-      motor.start(); whine.start();
+      const amp = ctx.createGain();
+      amp.gain.value = 0;
+      amp.connect(master);
+
+      const exhaust = ctx.createOscillator();
+      exhaust.setPeriodicWave(ctx.createPeriodicWave(
+        new Float32Array([0, .06, -.08, .04, -.035, .02]),
+        new Float32Array([0, 1, .43, .21, .105, .045])
+      ));
+      const exhaustFilter = ctx.createBiquadFilter();
+      exhaustFilter.type = 'lowpass';
+      exhaustFilter.Q.value = .42;
+      exhaust.connect(exhaustFilter).connect(amp);
+
+      const vibration = ctx.createOscillator();
+      vibration.type = 'triangle';
+      const vibrationGain = ctx.createGain();
+      vibration.connect(vibrationGain).connect(amp);
+
+      const breath = ctx.createBufferSource();
+      breath.buffer = noiseBuffer;
+      breath.loop = true;
+      const intake = ctx.createBiquadFilter();
+      intake.type = 'bandpass';
+      intake.Q.value = .8;
+      const intakeGain = ctx.createGain();
+      breath.connect(intake).connect(intakeGain).connect(amp);
+
+      const reverseGear = ctx.createOscillator();
+      reverseGear.type = 'triangle';
+      const reverseGain = ctx.createGain();
+      reverseGain.gain.value = 0;
+      reverseGear.connect(reverseGain).connect(amp);
+
+      const nodes = [exhaust, vibration, breath, reverseGear];
+      for (const node of nodes) node.start();
       return {
-        amp, max: 0.18, nodes: [motor, whine],
-        set(level) {
+        amp, max: .22, nodes,
+        set(level, { rpm = 760, reversing = false } = {}) {
           const t = ctx.currentTime;
-          motor.frequency.setTargetAtTime(48 + level * 40, t, 0.15);
-          whine.frequency.setTargetAtTime(260 + level * 520, t, 0.15);
-          f.frequency.setTargetAtTime(300 + level * 700, t, 0.15);
+          const crank = rpm / 60;
+          // An inline-four fires twice per revolution. The low-pass filter softens it from inside the cabin.
+          exhaust.frequency.setTargetAtTime(crank * 2, t, .09);
+          vibration.frequency.setTargetAtTime(crank, t, .09);
+          vibrationGain.gain.setTargetAtTime(.23 - .1 * level, t, .11);
+          exhaustFilter.frequency.setTargetAtTime(175 + crank * 6 + 255 * level, t, .11);
+          intake.frequency.setTargetAtTime(500 + crank * 10, t, .12);
+          intakeGain.gain.setTargetAtTime(.03 + .11 * level, t, .12);
+          reverseGear.frequency.setTargetAtTime(175 + crank * 5.2, t, .09);
+          reverseGain.gain.setTargetAtTime(reversing ? .105 : 0, t, .08);
         }
       };
     }
@@ -446,11 +484,11 @@ const SFX = (() => {
     const voice = loops[name]();
     let stopped = false;
     const handle = {
-      set(level) {
+      set(level, state) {
         if (stopped) return;
         const clamped = Math.max(0, Math.min(1, level));
         voice.amp.gain.setTargetAtTime(voice.max * clamped, ctx.currentTime, 0.08);
-        voice.set?.(clamped);
+        voice.set?.(clamped, state);
       },
       stop(fade = 0.25) {
         if (stopped) return;

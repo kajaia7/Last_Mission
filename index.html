@@ -86,7 +86,7 @@
         <img id="terrain" class="terrain" src="mars-outpost-pixel.png" alt="The base, rocket, and rover on the Martian surface.">
         <img id="base-interior" src="base-lobby-equipment.png" alt="White habitat lobby with Mars-facing windows, a mission PC, two server racks, suit gear, and a repair station." hidden>
         <img class="vehicle-interior" id="rocket-interior" src="rocket-continuous-cutaway.png" alt="A rocket cutaway with a rounded nose and two decks connected by a ladder. The hull continues below the frame." hidden>
-        <img class="vehicle-interior" id="rover-interior" src="rover-complete-cutaway.png" alt="A pressurized rover cutaway with rear storage, a driving station, and three visible treaded wheels mounted to the chassis." hidden>
+        <img class="vehicle-interior" id="rover-interior" src="rover-cutaway-empty-shelf.png" alt="A pressurized rover cutaway with rear storage, a driving station, and three visible treaded wheels mounted to the chassis." hidden>
         <div id="rocket-cargo" class="cargo-rocket" aria-hidden="true" hidden>
           <span class="cargo-crate"></span><span class="cargo-crate"></span><span class="cargo-crate"></span>
         </div>
@@ -199,11 +199,13 @@
         </div>
         <section id="rover-drive" class="rover-drive" tabindex="-1" aria-label="Rover driving" hidden>
           <canvas width="1440" height="600" aria-hidden="true"></canvas>
-          <p class="rover-objective" role="status">Find the lost research bot.</p>
+          <p class="rover-objective" role="status">Heading to research Station</p>
           <span class="marker research-station-marker" hidden>Research Station</span>
+          <span class="marker rover-boarding-marker" aria-hidden="true" hidden>Rover</span>
           <div class="rover-controls" aria-label="Rover controls">
             <button type="button" data-drive-direction="-1"><kbd>S</kbd> <span>Reverse</span></button>
             <button type="button" data-drive-direction="1"><kbd>W</kbd> <span>Forward</span></button>
+            <button type="button" class="rover-jump" hidden><kbd>Space</kbd> Jump</button>
             <button type="button" id="rover-site-action" hidden></button>
             <button type="button" class="park-rover">Exit drive</button>
           </div>

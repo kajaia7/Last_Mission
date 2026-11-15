@@ -121,7 +121,12 @@ function speak(copy){$('coach-copy').textContent=copy;$('coach').classList.add('
 function status(copy,kind='info'){$('status').textContent=copy;$('status').className='status '+kind;}
 
 function setPressure(value){
-  $('pressure-fill').style.width=value+'%';$('pressure-meter').setAttribute('aria-valuenow',String(Math.round(value)));
+  $('pressure-fill').style.width=value+'%';
+  const percent=String(Math.round(value));
+  if($('pressure-meter').getAttribute('aria-valuenow')!==percent){
+    $('pressure-meter').setAttribute('aria-valuenow',percent);
+    $('pressure-percentage').textContent=percent+'%';
+  }
 }
 function showLeakingPressure(){
   const label=state.pressure===0?'EMPTY':state.pressure<=20?'CRITICAL':'LOW';
@@ -238,7 +243,7 @@ function reset(){
 
 $('joints').innerHTML=JOINTS.map(j=>`<button id="joint-${j.id}" class="joint" type="button" data-joint="${j.id}" style="--x:${j.x};--y:${j.y}"><span class="target-ring" aria-hidden="true"></span><span class="leak-mark" aria-hidden="true"><i></i><i></i><i></i></span><span class="fitted-patch patch-picture" aria-hidden="true"></span></button>`).join('');
 document.querySelectorAll('.patch-picture').forEach(picture=>{picture.innerHTML=REPAIR_PLATE_MARKUP;});
-$('signal-bars').innerHTML=Array.from({length:8},(_,i)=>`<span style="height:${9+i*4}px"></span>`).join('');
+$('signal-bars').innerHTML=Array.from({length:8},(_,i)=>`<span style="height:${26+i*10}%"></span>`).join('');
 
 $('joints').addEventListener('click',event=>{const b=event.target.closest('[data-joint]');if(b)inspect(Number(b.dataset.joint));});
 $('joints').addEventListener('focusin',event=>{const b=event.target.closest('[data-joint]');if(b&&state.phase==='search')scan(JOINTS[Number(b.dataset.joint)]);});

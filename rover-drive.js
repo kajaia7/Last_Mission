@@ -5,9 +5,11 @@ function createRoverDrive(onExit) {
   const ctx = canvas.getContext('2d');
   const objective = drive.querySelector('.rover-objective');
   const exit = drive.querySelector('.park-rover');
+  const jump = drive.querySelector('.rover-jump');
   const siteAction = drive.querySelector('#rover-site-action');
   const pedals = [...drive.querySelectorAll('[data-drive-direction]')];
   const stationMarker = drive.querySelector('.research-station-marker');
+  const boardingMarker = drive.querySelector('.rover-boarding-marker');
   const researchTask = document.querySelector('#research-task');
   const outpostGame = document.querySelector('#outpost-game');
   const topbar = document.querySelector('.topbar');
@@ -22,17 +24,34 @@ function createRoverDrive(onExit) {
   const height = 200;
   ctx.scale(canvas.width / width, canvas.height / height);
   ctx.imageSmoothingEnabled = true;
-  // Route A's steep hill sits right on the road between hillStart and hillEnd.
-  const hillStart = 810;
-  const hillEnd = 1200;
-  const hillCenter = (hillStart + hillEnd) / 2;
-  const hillHeight = 58;
-  // Route B's detour stretches the road after the fork by the real distance ratio.
+  const horizonHaze = ctx.createLinearGradient(0, 48, 0, height);
+  horizonHaze.addColorStop(0, '#e88f7300');
+  horizonHaze.addColorStop(.36, '#e88f7312');
+  horizonHaze.addColorStop(.6, '#d9886b29');
+  horizonHaze.addColorStop(1, '#d9886b00');
+  const hillStart = 350;
+  const hillEnd = 750;
+  // Past the first rise the road forks and the player picks a route (Choose a Rover Route task).
+  const routeFork = 770;
+  // Route A: a steep hill sits right on the road.
+  const steepStart = 840;
+  const steepEnd = 1230;
+  const steepCenter = (steepStart + steepEnd) / 2;
+  const steepHeight = 58;
+  // Route B: the road after the fork grows by the real Mars Trek distance ratio.
   const shortDestination = 1780;
   const stationWidth = 210;
   const stationHeight = 136;
+  let destination, stationDoor, stationLeft, roverExitStart, roverDoor, roverFront;
+  let routeChoice = null;
   const departure = 115;
-  const stepOutDuration = .9;
+  const outboundObjective = 'Heading to research Station';
+  const roverGravity = 460;
+  const rollingResistance = 15;
+  const rollingDrag = 1.05;
+  const stepOutDuration = .72;
+  const jumpSpeed = 112;
+  const jumpGravity = 300;
   const suitHeight = 39;
   const suitWidth = suitHeight * 96 / 124;
   const keyboardDirections = { KeyW: 1, KeyS: -1 };
@@ -41,12 +60,16 @@ function createRoverDrive(onExit) {
   const roverScale = .27;
   const roverArtX = 1275;
   const roverArtY = 416;
+  const tireDiameter = 86;
+  const tireFaceRatio = .84;
+  // The original wheel art, traced from the outpost's middle wheel.
   const tireArt = { x: 1493, y: 590, width: 105, height: 88, hubX: 66, hubY: 43 };
+  const terrainScale = 2;
   const tires = [
-    { x: 37, radius: 10.5, phase: .4 },
-    { x: 10, radius: 12, phase: 1.1 },
-    { x: -18, radius: 12, phase: .6 },
-    { x: -42, radius: 12, phase: 0 }
+    { x: 39, mount: 36, radius: 9.8, phase: .4 },
+    { x: 12, mount: 19, radius: 11.8, phase: 1.1 },
+    { x: -15, mount: -8, radius: 11.8, phase: .6 },
+    { x: -42, mount: -32, radius: 11.8, phase: 0 }
   ];
   const dust = [];
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -55,34 +78,34 @@ function createRoverDrive(onExit) {
   let transitionStart = 0;
   let lastFrame = null;
   let distance = 0;
+  let wheelTravel = 0;
   let speed = 0;
   let cruising = true;
   let heading = 1;
   let atStation = false;
   let researchComplete = false;
-  // Route choice before the hill: null until the player picks a road.
-  const routeFork = hillStart - 170;
-  let routeChoice = null;
-  let destination, stationDoor, stationLeft, roverDoor, markers;
   let avatarX = 0;
   let avatarFacing = 1;
   let avatarStride = 0;
   let avatarWalking = false;
+  let avatarJumpHeight = 0;
+  let avatarJumpVelocity = 0;
   let stepOutTime = 0;
   let chassisSprite;
   let tireSprite;
   let roadSprite;
   let dustInterval = 0;
   let engineSound = null;
+  let reverseAlertTime = 0;
 
   // Place the research station at the end of the chosen road.
   function layoutTrack(length) {
     destination = Math.round(length);
     stationDoor = destination + 220;
     stationLeft = stationDoor - 137;
-    roverDoor = destination + 55;
-    markers = [351, 628];
-    for (let x = 797; x < destination - 60; x += 270) markers.push(x);
+    roverExitStart = destination - 34;
+    roverDoor = destination - 67;
+    roverFront = destination + 51;
     roadSprite = null;
   }
   layoutTrack(shortDestination);
@@ -90,99 +113,283 @@ function createRoverDrive(onExit) {
   function stopEngine() {
     engineSound?.stop();
     engineSound = null;
+    reverseAlertTime = 0;
+  }
+
+  function updateEngine(pedal, dt) {
+    if (!engineSound) engineSound = SFX.loop('engine', .24);
+    const roadSpeed = Math.abs(speed);
+    const reversing = speed * heading < -7;
+    if (reversing) {
+      reverseAlertTime -= dt;
+      if (reverseAlertTime <= 0) {
+        SFX.play('reverseAlert');
+        reverseAlertTime = .62;
+      }
+    } else reverseAlertTime = 0;
+
+    const throttle = pedal === 0 ? 0 : cruising ? .3 : 1;
+    // Short automatic gear ranges keep cruise RPM low. More pedal adds converter slip.
+    let rpm;
+    if (reversing) rpm = 780 + roadSpeed * (14 + 8 * throttle);
+    else if (roadSpeed < 29) rpm = 760 + roadSpeed * 65;
+    else if (roadSpeed < 60) rpm = 1550 + (roadSpeed - 29) * 43;
+    else if (roadSpeed < 96) rpm = 1680 + (roadSpeed - 60) * 34;
+    else rpm = 1750 + (roadSpeed - 96) * 23;
+    if (!reversing) rpm += 1060 * throttle * Math.min(1, roadSpeed / 32);
+
+    const load = .24 + .39 * throttle + .19 * roadSpeed / 145;
+    engineSound.set(load, { rpm, reversing });
+  }
+
+  function riseBetween(x, start, end) {
+    if (x <= start || x >= end) return 0;
+    return Math.sin(Math.PI * (x - start) / (end - start)) ** 2;
   }
 
   function groundAt(x) {
-    if (!routeChoice || x < routeFork) return 144;
-    if (!routeChoice.avoidedHill) {
-      // Route A: straight over a steep hill (about 25 degrees at its steepest on screen).
-      const progress = (x - hillStart) / (hillEnd - hillStart);
-      if (progress <= 0 || progress >= 1) return 144;
-      return 144 - hillHeight * (1 - Math.cos(2 * Math.PI * progress)) / 2;
-    }
+    const ground = 144 - 30 * riseBetween(x, hillStart, hillEnd);
+    if (!routeChoice || x < routeFork) return ground;
+    // Route A: straight over the steep hill.
+    if (!routeChoice.avoidedHill) return ground - steepHeight * riseBetween(x, steepStart, steepEnd);
     // Route B: the long way round stays low, with only gentle rolls.
     const fadeIn = Math.min(1, (x - routeFork) / 140);
     const fadeOut = Math.max(0, Math.min(1, (destination - 40 - x) / 140));
-    return 144 - 4 * Math.sin((x - routeFork) / 80) ** 2 * fadeIn * fadeOut;
+    return ground - 4 * Math.sin((x - routeFork) / 80) ** 2 * fadeIn * fadeOut;
+  }
+
+  function coastWithGravity(dt) {
+    const front = distance + tires[0].x * heading;
+    const rear = distance + tires.at(-1).x * heading;
+    const grade = (groundAt(front) - groundAt(rear)) / (front - rear);
+    const downhillAcceleration = roverGravity * grade / (1 + grade ** 2);
+    const downhillSpeed = speed + downhillAcceleration * dt;
+    const rollingSpeed = Math.max(0, Math.abs(downhillSpeed) - rollingResistance * dt);
+    return Math.sign(downhillSpeed) * rollingSpeed / (1 + rollingDrag * dt);
+  }
+
+  function trailShoulder(x) {
+    return 17 + 3.1 * Math.sin(x / 51) + 1.8 * Math.sin(x / 11) + .8 * Math.sin(x / 3.8);
   }
 
   function prepareRoad() {
     const trackWidth = destination + width;
     roadSprite = document.createElement('canvas');
-    roadSprite.width = trackWidth * 2;
-    roadSprite.height = height * 2;
+    roadSprite.width = trackWidth * terrainScale;
+    roadSprite.height = height * terrainScale;
     const road = roadSprite.getContext('2d');
-    road.scale(2, 2);
-    const roughness = x => Math.sin(x / 13) + .5 * Math.sin(x / 4);
-    const band = (far, near, fill) => {
-      road.beginPath();
-      road.moveTo(0, far(0));
-      for (let x = 2; x <= trackWidth; x += 2) road.lineTo(x, far(x));
-      road.lineTo(trackWidth, near(trackWidth));
-      for (let x = trackWidth - 2; x >= 0; x -= 2) road.lineTo(x, near(x));
-      road.closePath();
-      road.fillStyle = fill;
-      road.fill();
-    };
-    const farEdge = x => groundAt(x) - 1.7 + roughness(x) * .45;
-    const nearEdge = x => groundAt(x) + 21 + roughness(x) * 1.5;
-    const foreground = road.createLinearGradient(0, 130, 0, height);
-    foreground.addColorStop(0, '#e4674e');
-    foreground.addColorStop(.55, '#c84c3b');
-    foreground.addColorStop(1, '#9b322f');
-    band(x => groundAt(x) - 3.8 + roughness(x) * 1.4, () => height, foreground);
-    band(farEdge, x => nearEdge(x) + 2, '#914f57');
-    band(farEdge, nearEdge, '#535563');
-    band(x => groundAt(x) + 1, x => groundAt(x) + 4 + roughness(x) * .6, '#777887');
-    band(x => groundAt(x) + 5, x => groundAt(x) + 9 + roughness(x) * .5, '#444654');
-    band(x => groundAt(x) + 10, x => groundAt(x) + 14 + roughness(x) * .65, '#626575');
-    band(x => nearEdge(x) - 3, nearEdge, '#67616e');
+    road.scale(terrainScale, terrainScale);
+    road.imageSmoothingEnabled = false;
+    if (routeChoice && !routeChoice.avoidedHill) drawHillShoulder(road);
 
-    let seed = 0x4d415253;
-    const noise = () => {
-      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-      return seed / 2 ** 32;
-    };
-    const gravel = ['#292d4499', '#b4b3ba80', '#9297a26b', '#31333b90'];
-    const grit = ['#762c3f99', '#f5815b99', '#e9674788', '#8f384966'];
-    for (let i = 0; i < 11000; i++) {
-      const x = noise() * trackWidth;
-      const y = groundAt(x) - 1 + noise() * 59;
-      if (y > height) continue;
-      const palette = y < nearEdge(x) ? gravel : grit;
-      road.fillStyle = palette[i % palette.length];
-      road.fillRect(Math.floor(x), Math.floor(y * 2) / 2, .5 + noise() * 2.6, .5 + noise() * .65);
+    const surface = new Path2D();
+    surface.moveTo(0, groundAt(0) - 3);
+    for (let x = 2; x <= trackWidth; x += 2) {
+      const ridge = Math.sin(x / 16) * 1.0 + Math.sin(x / 4) * .65;
+      surface.lineTo(x, groundAt(x) - 3 + ridge);
+    }
+    surface.lineTo(trackWidth, height);
+    surface.lineTo(0, height);
+    surface.closePath();
+    road.save();
+    road.clip(surface);
+
+    // Follow the wheel elevation with the base's own painted regolith. Vary the
+    // space between seams so the same landmarks do not repeat at regular intervals.
+    const textureWidth = 440 * terrainScale;
+    const tileHeight = 96;
+    const texture = document.createElement('canvas');
+    texture.width = textureWidth * 2;
+    texture.height = tileHeight * terrainScale;
+    const textureCtx = texture.getContext('2d');
+    const sourceY = 684;
+    const sourceHeight = outpost.naturalHeight - sourceY;
+    textureCtx.drawImage(outpost, 0, sourceY, outpost.naturalWidth, sourceHeight,
+      0, 0, textureWidth, texture.height);
+    textureCtx.translate(texture.width, 0);
+    textureCtx.scale(-1, 1);
+    textureCtx.drawImage(outpost, 0, sourceY, outpost.naturalWidth, sourceHeight,
+      0, 0, textureWidth, texture.height);
+    const tileWidths = [410, 478, 376, 462, 396, 484];
+    for (let start = 0, tile = 0; start < trackWidth; tile++) {
+      const tileWidth = tileWidths[tile % tileWidths.length];
+      const end = Math.min(start + tileWidth, trackWidth);
+      const offset = (tile % 2) * textureWidth;
+      for (let x = start; x < end; x += 2) {
+        const strip = Math.min(2, end - x);
+        const column = offset + (x - start) * textureWidth / tileWidth;
+        road.drawImage(texture, column, 0, strip * textureWidth / tileWidth, texture.height,
+          x, groundAt(x + strip / 2) - 6, strip, tileHeight);
+      }
+      start = end;
     }
 
-    // Near rocks follow the slope so the foreground keeps its depth over the hill.
-    const rock = new Path2D('M-7 0L-6 -2L-4 -3L-3 -6L1 -7L3 -5L5 -4L7 0Z');
-    const rockFace = new Path2D('M-6 -2L-4 -3L-3 -6L1 -7L3 -5L1 -4L-1 -4L-2 -2Z');
-    for (let i = 0; i < 620; i++) {
-      const x = Math.round(noise() * trackWidth);
-      const depth = noise();
-      const y = Math.floor(nearEdge(x) + 7 + depth * 39);
-      if (y > height + 3) continue;
-      const size = .12 + noise() * (.4 + depth * .5);
+    const foregroundShade = road.createLinearGradient(0, 151, 0, height);
+    foregroundShade.addColorStop(0, '#54233000');
+    foregroundShade.addColorStop(1, '#54233048');
+    road.fillStyle = foregroundShade;
+    road.fillRect(0, 0, trackWidth, height);
+
+    // Give the packed soil a rust tone and soften its edge without covering the painted rock texture.
+    for (const [edge, color] of [[4, '#aa3e2f22'], [0, '#b4433029'], [-4, '#c04a3522']]) {
+      const soil = new Path2D();
+      soil.moveTo(0, groundAt(0) - 6);
+      for (let x = 3; x <= trackWidth; x += 3) soil.lineTo(x, groundAt(x) - 6);
+      soil.lineTo(trackWidth, groundAt(trackWidth) - 6);
+      for (let x = trackWidth; x >= 0; x -= 2) {
+        soil.lineTo(x, groundAt(x) + trailShoulder(x) + edge);
+      }
+      soil.closePath();
+      road.fillStyle = color;
+      road.fill(soil);
+    }
+
+    const sun = road.createLinearGradient(0, 0, trackWidth, 0);
+    for (let x = 0; x <= trackWidth; x += 20) {
+      const depth = Math.max(0, groundAt(x) - 144);
+      const slope = (groundAt(x + 5) - groundAt(x - 5)) / 10;
+      const shade = Math.max(0, slope * .67) + depth * .0045;
+      const light = Math.max(0, -slope * .61);
+      sun.addColorStop(x / trackWidth, shade > light ? `rgb(85 33 46 / ${shade})` : `rgb(237 111 59 / ${light})`);
+    }
+    road.fillStyle = sun;
+    road.fillRect(0, 0, trackWidth, height);
+    road.restore();
+
+    drawTrailDetails(road, trackWidth);
+  }
+
+  function drawTrailDetails(road, trackWidth) {
+    let seed = 0x6d2b79f5;
+    const random = () => {
+      seed ^= seed << 13;
+      seed ^= seed >>> 17;
+      seed ^= seed << 5;
+      return (seed >>> 0) / 4294967296;
+    };
+
+    // Short tapered ruts reveal darker compacted soil under the loose dirt.
+    for (const depth of [4.4, 10.4]) {
+      for (let x = -8; x < trackWidth; x += 9 + random() * 20) {
+        const end = Math.min(trackWidth, x + 5 + random() * 17);
+        const middle = (x + end) / 2;
+        const offset = depth + (random() - .5) * 2.1 + Math.sin(x / 37);
+        const width = .55 + random() * 1.15;
+        const startY = groundAt(x) + offset;
+        const middleY = groundAt(middle) + offset;
+        const endY = groundAt(end) + offset + (random() - .5);
+        road.beginPath();
+        road.moveTo(x, startY);
+        road.lineTo(middle, middleY - width * .75);
+        road.lineTo(end, endY);
+        road.lineTo(middle, middleY + width);
+        road.closePath();
+        road.fillStyle = depth < 5 ? '#7a312e72' : '#8a383367';
+        road.fill();
+      }
+    }
+
+    const chips = ['#71313a92', '#934032a7', '#bd583c88', '#da77539b', '#ec946676'];
+    for (let i = 0; i < 3100; i++) {
+      const x = Math.round(random() * trackWidth * 2) / 2;
+      const margin = trailShoulder(x);
+      const depth = random() < .32 ? random() * margin : margin + (random() - .46) * 13;
+      const y = Math.round((groundAt(x) + depth) * 2) / 2;
+      road.fillStyle = chips[i % chips.length];
+      road.fillRect(x, y, .5 + (random() * 2 | 0) * .5, .5);
+    }
+
+    const stones = [
+      [new Path2D('M-4 0L-3 -2L-1 -2.5L.5 -4L2.5 -3L4.5 -1.5L5 0Z'),
+        new Path2D('M-3 -2L-1 -2.5L.5 -4L2.5 -3L1 -2L-2 -1Z'),
+        new Path2D('M1 -2L2.5 -3L4.5 -1.5L5 0L2 0Z')],
+      [new Path2D('M-5 0L-3 -1.5L-1.5 -1.5L.5 -3.5L3 -3L4 -2L5 0Z'),
+        new Path2D('M-3 -1.5L-1.5 -1.5L.5 -3.5L3 -3L1 -1L-2 -.5Z'),
+        new Path2D('M1 -1L3 -3L4 -2L5 0L2.5 0Z')],
+      [new Path2D('M-4.5 0L-4 -1L-2 -2L-1 -3L1 -2L3 -2.5L5 0Z'),
+        new Path2D('M-4 -1L-2 -2L-1 -3L1 -2L3 -2.5L2.5 -1.5L-1 -.5Z'),
+        new Path2D('M2.5 -1.5L3 -2.5L5 0L2 0Z')]
+    ];
+    const paintStone = (x, y, scale, near) => {
+      const [shape, litFace, flank] = stones[Math.floor(random() * stones.length)];
       road.save();
-      road.translate(x, y);
-      road.scale(size * (1 + noise() * .8), size);
-      road.fillStyle = '#67273570';
-      road.fillRect(-8, -1, 17, 2);
-      road.fillStyle = i % 2 ? '#853848' : '#9d3f43';
-      road.fill(rock);
-      road.fillStyle = i % 2 ? '#e67754' : '#d55745';
-      road.fill(rockFace);
+      road.translate(Math.round(x * 2) / 2, Math.round(y * 2) / 2);
+      road.scale(scale, scale);
+      road.fillStyle = '#54283179';
+      road.fillRect(-3, -.15, 8, 1);
+      road.fillStyle = near ? '#914436' : '#a65640';
+      road.fill(shape);
+      road.fillStyle = near ? '#d77a51' : '#e18c61';
+      road.fill(litFace);
+      road.fillStyle = near ? '#6e3232' : '#8b463b';
+      road.fill(flank);
       road.restore();
+    };
+    for (let x = 3; x < trackWidth; x += 7 + random() * 23) {
+      const near = random() < .72;
+      const y = groundAt(x) + (near ? trailShoulder(x) + random() * 12 : -2 + random() * 1.5);
+      const scale = near ? .47 + random() * 1.06 : .4 + random() * .4;
+      paintStone(x, y, scale, near);
+      if (near && random() < .47) {
+        paintStone(x - 4 - random() * 4, y + 1 + random() * 2, scale * .46, true);
+        paintStone(x + 3 + random() * 5, y + random() * 4, scale * .32, true);
+      }
     }
   }
 
-  // The hill in the distance: ahead of the fork, and off to the side on Route B.
+  // Route A: the hill's rocky shoulder rises above the road that climbs its face,
+  // painted with the same outpost rock texture as the rest of the trail.
+  function drawHillShoulder(road) {
+    const left = steepStart - 30;
+    const right = steepEnd + 30;
+    const top = 144 - steepHeight * 1.5 - 10;
+    const rock = new Path2D();
+    rock.moveTo(left, 150);
+    for (let x = left; x <= right; x += 2) {
+      const rise = 144 - groundAt(x);
+      const rubble = (Math.sin(x / 6) * .9 + Math.sin(x / 2.9) * .64) * Math.min(1, rise / 9);
+      rock.lineTo(x, groundAt(x) - 5 - rise * .45 - Math.abs(rubble) * 1.5);
+    }
+    rock.lineTo(right, 150);
+    rock.closePath();
+    road.save();
+    road.clip(rock);
+    road.drawImage(outpost, 205, 716, 1360, 131, left, top, right - left, 150 - top);
+    const shade = road.createLinearGradient(0, top, 0, 150);
+    shade.addColorStop(0, '#f0915f2e');
+    shade.addColorStop(.45, '#a44a4438');
+    shade.addColorStop(1, '#592334a8');
+    road.fillStyle = shade;
+    road.fillRect(left, top, right - left, 150 - top);
+    road.restore();
+
+    // A yellow "steep slope" sign at the foot of the hill.
+    const signX = steepStart - 26;
+    const base = groundAt(signX);
+    road.fillStyle = '#392938';
+    road.fillRect(signX - 1, base - 16, 2, 16);
+    road.beginPath();
+    road.moveTo(signX, base - 28);
+    road.lineTo(signX + 9, base - 13);
+    road.lineTo(signX - 9, base - 13);
+    road.closePath();
+    road.fillStyle = '#ffd36e';
+    road.fill();
+    road.lineWidth = 1.2;
+    road.strokeStyle = '#392938';
+    road.stroke();
+    road.fillStyle = '#392938';
+    road.fillRect(signX - .6, base - 23, 1.2, 5);
+    road.fillRect(signX - .6, base - 16.5, 1.2, 1.2);
+  }
+
+  // The steep hill in the distance: ahead before the fork, and off to the side on Route B.
   function drawDistantHill(camera) {
-    const x = width / 2 + (hillCenter - camera - width / 2) * .55;
+    const x = width / 2 + (steepCenter - camera - width / 2) * .55;
     if (x < -160 || x > width + 160) return;
     const body = ctx.createLinearGradient(0, 96, 0, 142);
-    body.addColorStop(0, '#c86a57');
-    body.addColorStop(1, '#8e4650');
+    body.addColorStop(0, '#c9775fd9');
+    body.addColorStop(1, '#9c5352d9');
     ctx.beginPath();
     ctx.moveTo(x - 150, 142);
     for (let dx = -150; dx <= 150; dx += 6) {
@@ -192,7 +399,7 @@ function createRoverDrive(onExit) {
     ctx.closePath();
     ctx.fillStyle = body;
     ctx.fill();
-    ctx.fillStyle = '#f3a77f55';
+    ctx.fillStyle = '#f3a77f4d';
     ctx.beginPath();
     ctx.moveTo(x - 70, 142 - 44 * (1 - (70 / 150) ** 2) ** 1.6);
     ctx.quadraticCurveTo(x - 20, 96, x + 6, 98.5);
@@ -201,89 +408,31 @@ function createRoverDrive(onExit) {
     ctx.fill();
   }
 
-  // Route A: the hill rises right across the road, with rocky layers and a warning sign.
-  function drawRoadHill(camera) {
-    if (camera > hillEnd + 40 || camera + width < hillStart - 40) return;
-    const rock = ctx.createLinearGradient(0, 144 - hillHeight - 8, 0, 150);
-    rock.addColorStop(0, '#d1735a');
-    rock.addColorStop(.5, '#a3504e');
-    rock.addColorStop(1, '#6e3546');
-    ctx.beginPath();
-    ctx.moveTo(hillStart - 30 - camera, 150);
-    for (let x = hillStart - 30; x <= hillEnd + 30; x += 3) {
-      // The hill's rocky shoulder rises above the road that climbs its face.
-      const rise = 144 - groundAt(x);
-      const crest = groundAt(x) - 6 - rise * .45 - (rise > 1 ? Math.abs(Math.sin(x / 11)) * 2.5 : 0);
-      ctx.lineTo(x - camera, crest);
-    }
-    ctx.lineTo(hillEnd + 30 - camera, 150);
-    ctx.closePath();
-    ctx.fillStyle = rock;
-    ctx.fill();
-    for (const [lift, color] of [[.35, '#f19a7466'], [.6, '#5e2f4566'], [.82, '#f6b08955']]) {
-      ctx.beginPath();
-      for (let x = hillStart + 20; x <= hillEnd - 20; x += 4) {
-        const y = 144 - (144 - groundAt(x)) * lift - 4 + Math.sin(x / 13) * .7;
-        if (x === hillStart + 20) ctx.moveTo(x - camera, y);
-        else ctx.lineTo(x - camera, y);
-      }
-      ctx.strokeStyle = color;
-      ctx.lineWidth = .9;
-      ctx.stroke();
-    }
-    // Yellow "steep slope" sign at the foot of the hill.
-    const signX = hillStart - 26 - camera;
-    ctx.fillStyle = '#392938';
-    ctx.fillRect(signX - 1, 128, 2, 16);
-    ctx.fillStyle = '#ffd36e';
-    ctx.strokeStyle = '#392938';
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.moveTo(signX, 116);
-    ctx.lineTo(signX + 9, 131);
-    ctx.lineTo(signX - 9, 131);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = '#392938';
-    ctx.fillRect(signX - .6, 121, 1.2, 5);
-    ctx.fillRect(signX - .6, 127.5, 1.2, 1.2);
-  }
-
-  function drawLandscape(camera) {
+  function drawLandscape(camera, now) {
     ctx.fillStyle = '#e88968';
     ctx.fillRect(0, 0, width, height);
-    const tileWidth = 530;
-    const shift = camera * .3;
     if (background.naturalWidth) {
-      for (let tile = Math.floor(shift / tileWidth); tile * tileWidth - shift < width; tile++) {
-        const left = tile * tileWidth - shift;
-        ctx.save();
-        ctx.translate(left + (tile % 2 ? tileWidth : 0), 0);
-        ctx.scale(tile % 2 ? -1 : 1, 1);
-        ctx.drawImage(background, 0, 0, background.naturalWidth, 720, 0, 0, tileWidth, 163);
-        ctx.drawImage(background, 0, 720, background.naturalWidth, 92, 0, 163, tileWidth, height - 163);
-        ctx.restore();
-      }
+      const shift = camera * .144;
+      ctx.drawImage(background, Math.round(-shift * 2) / 2, 0, 718, height);
     }
 
     if (!routeChoice || routeChoice.avoidedHill) drawDistantHill(camera);
-    else drawRoadHill(camera);
-    if (!roadSprite) prepareRoad();
-    ctx.drawImage(roadSprite, -camera, 0, roadSprite.width / 2, height);
-
-    for (const marker of markers) {
-      const x = Math.round(marker - camera);
-      if (x < -12 || x > width + 12) continue;
-      const y = groundAt(marker) - 2;
-      ctx.fillStyle = '#352e3e80';
-      ctx.fillRect(x - 4, y, 13, 1.5);
-      ctx.fillStyle = '#392938';
-      ctx.fillRect(x - 1.5, y - 11, 3, 12);
-      ctx.fillStyle = '#e18d61';
-      ctx.fillRect(x + .5, y - 10, 1, 10);
-      ctx.fillStyle = '#ffe3ad';
-      ctx.fillRect(x - 1.5, y - 10, 3, 2);
+    ctx.fillStyle = horizonHaze;
+    ctx.fillRect(0, 48, width, height - 48);
+    const drift = reducedMotion.matches ? 0 : now * .009;
+    const span = width + 240;
+    for (let i = 0; i < 3; i++) {
+      const offset = (i * 233 + drift - camera * .24) % span;
+      const x = (offset + span) % span - 120;
+      groundGlow(x, 117 + i * 4, 115, 8, '#e7866119', '#e7866100');
+    }
+    if (!roadSprite && outpost.naturalWidth) prepareRoad();
+    if (roadSprite) {
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(roadSprite, Math.round(camera * terrainScale), 0, width * terrainScale, height * terrainScale,
+        0, 0, width, height);
+      ctx.restore();
     }
   }
 
@@ -305,20 +454,44 @@ function createRoverDrive(onExit) {
     tire.drawImage(outpost, -tireArt.x, -tireArt.y);
   }
 
-  function drawTire(axle, turn, farSide = false) {
-    const scale = axle.radius * 2 / 86;
+  function drawTire(axle, farSide = false) {
+    // Same motion as before (each wheel rides its own suspension and turns with the
+    // distance it rolls), drawn with the original wheel art and its spinning hub.
+    const turn = axle.phase - (reducedMotion.matches ? 0 : wheelTravel * heading / axle.radius);
+    const scale = axle.radius * 2 / tireDiameter;
     const { hubX, hubY } = tireArt;
     ctx.save();
-    ctx.translate(axle.screenX, groundAt(axle.worldX) - (86 - hubY) * scale);
+    ctx.translate(axle.centerX, axle.centerY);
     ctx.scale(-scale * heading, scale);
     if (farSide) ctx.filter = 'brightness(.63)';
     ctx.drawImage(tireSprite, -hubX, -hubY);
-    // The hub spins while the tire keeps its three-quarter silhouette.
     ctx.beginPath();
     ctx.arc(0, 0, 12, 0, Math.PI * 2);
     ctx.clip();
-    ctx.rotate(turn + axle.phase);
+    ctx.rotate(turn);
     ctx.drawImage(tireSprite, -hubX, -hubY);
+    ctx.restore();
+  }
+
+  function drawSuspension(axles, screenX, y, pitch) {
+    const cos = Math.cos(pitch);
+    const sin = Math.sin(pitch);
+    ctx.save();
+    ctx.lineCap = 'round';
+    for (const axle of axles) {
+      const x = axle.mount * heading;
+      const anchorX = screenX + x * cos + 22 * sin;
+      const anchorY = y + x * sin - 22 * cos;
+      ctx.beginPath();
+      ctx.moveTo(anchorX, anchorY);
+      ctx.lineTo(axle.centerX, axle.centerY);
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = '#281d24';
+      ctx.stroke();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#8c6552';
+      ctx.stroke();
+    }
     ctx.restore();
   }
 
@@ -337,29 +510,31 @@ function createRoverDrive(onExit) {
   function drawRover(screenX) {
     if (!outpost.naturalWidth) return;
     if (!chassisSprite) prepareRoverSprites();
-    const axles = tires.map(tire => ({
-      ...tire, worldX: distance + tire.x * heading, screenX: screenX + tire.x * heading
-    }));
-    const rear = groundAt(axles.at(-1).worldX);
-    const front = groundAt(axles[0].worldX);
+    const axles = tires.map(tire => {
+      const worldX = distance + tire.x * heading;
+      const x = screenX + tire.x * heading;
+      const ground = groundAt(worldX);
+      const slope = (groundAt(worldX + 1) - groundAt(worldX - 1)) / 2;
+      const normal = Math.hypot(1, tireFaceRatio * slope);
+      return { ...tire, ground,
+        centerX: x + tire.radius * tireFaceRatio ** 2 * slope / normal,
+        centerY: ground - tire.radius / normal
+      };
+    });
+    const rear = axles.at(-1).ground;
+    const front = axles[0].ground;
     const pitch = Math.atan2((front - rear) * heading, tires[0].x - tires.at(-1).x);
     const y = (front + rear) / 2;
-    const turn = (departure - distance) * heading / 11.7;
 
-    groundGlow(screenX + 50 * heading, groundAt(distance + 50 * heading) + 3,
-      28, 4.5, atStation ? '#ffe8bd28' : '#ffe8bd6b', '#ffe8bd00');
-    groundGlow(screenX - 3 * heading, y + 1, 56, 6, '#21172a99', '#21172a00');
-    for (const axle of axles) {
-      groundGlow(axle.screenX, groundAt(axle.worldX) + .6, axle.radius, 2.1, '#21172acc', '#21172a00');
-    }
-    drawTire(axles[0], turn, true);
+    drawSuspension(axles, screenX, y, pitch);
+    drawTire(axles[0], true);
     ctx.save();
     ctx.translate(screenX, y);
     ctx.rotate(pitch);
     ctx.scale(-roverScale * heading, roverScale);
     ctx.drawImage(chassisSprite, -210, -260);
     ctx.restore();
-    for (const axle of axles.slice(1)) drawTire(axle, turn);
+    for (const axle of axles.slice(1)) drawTire(axle);
   }
 
   function updateDust(dt, traveled) {
@@ -396,9 +571,9 @@ function createRoverDrive(onExit) {
       const y = Math.round(puff.y);
       const size = Math.round(puff.size + progress * 3);
       ctx.globalAlpha = (1 - progress) * .45;
-      ctx.fillStyle = '#dfc0bb';
+      ctx.fillStyle = '#edb29a';
       ctx.fillRect(x - size + 1, y - 2, size + 1, 2.5);
-      ctx.fillStyle = '#9e7e87';
+      ctx.fillStyle = '#a34f4c';
       ctx.fillRect(x - size, y, 2 * size, 3);
       ctx.fillStyle = '#f4c7aa';
       ctx.fillRect(x - Math.round(size * .6), y - 3, 1.5, 1);
@@ -408,81 +583,64 @@ function createRoverDrive(onExit) {
 
   function drawAstronaut(camera) {
     if (!atStation || !astronaut.naturalWidth) return;
-    const steppingOut = stepOutTime < stepOutDuration;
-    const progress = steppingOut ? stepOutTime / stepOutDuration : 1;
-    const pose = avatarWalking ? 1 + Math.floor(avatarStride / 3) % 4 : 0;
+    const pose = avatarJumpHeight > 0 ? 5 : avatarWalking ? 1 + Math.floor(avatarStride / 3) % 4 : 0;
     const floor = groundAt(avatarX);
-    const boot = floor - (1 - progress) * 14;
     const x = avatarX - camera;
-    const opacity = Math.min(1, progress * 4);
-    groundGlow(x + 1, floor + 1, 11 - (1 - progress) * 3, 2.8,
-      `rgb(31 24 44 / ${opacity * .72})`, '#1f182c00');
     ctx.save();
-    ctx.translate(x, boot + suitHeight / 124);
+    ctx.translate(x, floor - avatarJumpHeight + suitHeight / 124);
     ctx.scale(avatarFacing, 1);
-    ctx.globalAlpha = opacity;
     ctx.drawImage(astronaut, pose * 96, 0, 96, 124, -suitWidth / 2, -suitHeight, suitWidth, suitHeight);
     ctx.restore();
   }
 
-  function drawStation(left) {
+  const stationArtScale = .94;
+  const stationArtCrop = { x: 29, y: 67, width: 1380, height: 892 };
+
+  function drawStation(left, entranceReady) {
     const floor = groundAt(stationLeft);
     const doorway = left + stationDoor - stationLeft;
-    ctx.save();
-    ctx.translate(left, floor);
-    // The beveled apron ties the station's feet and steps into the track.
-    ctx.fillStyle = '#292739';
-    ctx.beginPath();
-    ctx.moveTo(9, -4);
-    ctx.lineTo(stationWidth, -4);
-    ctx.lineTo(stationWidth + 7, 7);
-    ctx.lineTo(stationWidth + 7, 10);
-    ctx.lineTo(-5, 10);
-    ctx.lineTo(-5, 7);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = '#555669';
-    ctx.beginPath();
-    ctx.moveTo(9, -4);
-    ctx.lineTo(stationWidth, -4);
-    ctx.lineTo(stationWidth + 7, 7);
-    ctx.lineTo(-5, 7);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = '#878094';
-    ctx.fillRect(-5, 7, stationWidth + 12, 1);
-    ctx.restore();
+    const artLeft = doorway - (stationDoor - stationLeft) * stationArtScale;
+    const artWidth = stationWidth * stationArtScale;
+    const artHeight = stationHeight * stationArtScale;
+    const artTop = floor - artHeight;
+    const crop = stationArtCrop;
+    const artX = x => artLeft + (x - crop.x) * artWidth / crop.width;
+    const artY = y => artTop + (y - crop.y) * artHeight / crop.height;
 
-    groundGlow(left + stationWidth * .53, floor, stationWidth * .55, 5, '#21172ac9', '#21172a00');
-    ctx.drawImage(station, 29, 67, 1380, 892, left, floor - stationHeight, stationWidth, stationHeight);
-    groundGlow(doorway, floor + 1, 24, 5, '#ffc07974', '#ffc07900');
-    for (const x of [left + 11, left + 62, doorway - 22, doorway + 22, left + stationWidth - 6]) {
-      groundGlow(x, floor + 5, 8, 2, '#79f3ed70', '#79f3ed00');
-      ctx.fillStyle = '#302f41';
-      ctx.fillRect(x - 3, floor + 4, 6, 2);
-      ctx.fillStyle = '#8ce1de';
-      ctx.fillRect(x - 2, floor + 4.5, 4, .8);
+    ctx.drawImage(station, crop.x, crop.y, crop.width, crop.height, artLeft, artTop, artWidth, artHeight);
+
+    if (entranceReady) {
+      groundGlow(artX(924), artY(559), 9, 5, '#ffe3b2c4', '#ffb45300');
+      groundGlow(artX(1067), artY(618), 5, 3, '#84f4d36b', '#84f4d300');
     }
-    // Use the station lamp and the bot's eyes as small points of color.
-    groundGlow(doorway - .5, floor - 61, 9, 5, '#ffb45391', '#ffb45300');
     if (!researchComplete) {
-      groundGlow(left + 30, floor - 39, 10, 4, '#7be0dd72', '#7be0dd00');
+      groundGlow(artX(228), artY(699), 9, 3.5, '#84edcd5e', '#84edcd00');
     }
   }
 
-  function paint() {
+  function paint(now) {
     const camera = Math.max(0, distance - 177);
-    drawLandscape(camera);
+    drawLandscape(camera, now);
+    const roverX = distance - camera;
     const left = stationLeft - camera;
     const labelX = stationDoor - camera;
+    const entranceReady = canEnterStation();
     stationMarker.hidden = !station.naturalWidth || labelX > width - 70;
+    stationMarker.classList.toggle('is-ready', entranceReady);
     if (!stationMarker.hidden) {
-      stationMarker.style.setProperty('--x', `min(${labelX / width * 100}%, calc(100% - 64px))`);
+      stationMarker.style.setProperty('--x', `${(labelX - 23) / width * 100}%`);
     }
-    if (left < width && station.naturalWidth) drawStation(left);
+    boardingMarker.hidden = !atStation || !researchComplete;
+    if (!boardingMarker.hidden) {
+      boardingMarker.style.setProperty('--x', `${roverX / width * 100}%`);
+      boardingMarker.classList.toggle('is-ready', canBoardRover());
+    }
+    if (left < width && station.naturalWidth) drawStation(left, entranceReady);
     drawDust(camera);
-    drawRover(distance - camera);
-    drawAstronaut(camera);
+    const behindRover = atStation && stepOutTime < stepOutDuration;
+    if (behindRover) drawAstronaut(camera);
+    drawRover(roverX);
+    if (!behindRover) drawAstronaut(camera);
   }
 
   function clearInput() {
@@ -509,6 +667,10 @@ function createRoverDrive(onExit) {
   }
 
   function configureControls() {
+    drive.classList.toggle('is-on-foot', atStation);
+    objective.classList.toggle('is-announcement-only', atStation);
+    jump.hidden = !atStation;
+    jump.disabled = stepOutTime < stepOutDuration;
     for (const [index, pedal] of pedals.entries()) {
       pedal.querySelector('kbd').textContent = (atStation ? ['A', 'D'] : ['S', 'W'])[index];
       pedal.querySelector('span').textContent = (atStation ? ['Walk left', 'Walk right'] : ['Reverse', 'Forward'])[index];
@@ -525,28 +687,44 @@ function createRoverDrive(onExit) {
     atStation = true;
     speed = 0;
     stepOutTime = reducedMotion.matches ? stepOutDuration : 0;
-    avatarX = reducedMotion.matches ? roverDoor : destination + 25;
-    avatarFacing = 1;
+    avatarX = reducedMotion.matches ? roverDoor : roverExitStart;
+    avatarFacing = -1;
     avatarStride = 0;
-    avatarWalking = false;
+    avatarWalking = stepOutTime < stepOutDuration;
+    avatarJumpHeight = 0;
+    avatarJumpVelocity = 0;
     clearInput();
     configureControls();
     objective.textContent = 'Lost research bot located. Enter the Research Station.';
   }
 
+  function canEnterStation() {
+    return atStation && !researchComplete && stepOutTime >= stepOutDuration && Math.abs(avatarX - stationDoor) <= 15;
+  }
+
+  function canBoardRover() {
+    return atStation && researchComplete && stepOutTime >= stepOutDuration
+      && avatarX >= roverDoor && avatarX <= roverFront + 12;
+  }
+
   function stationActionLabel() {
-    if (!atStation || stepOutTime < stepOutDuration) return '';
-    if (researchComplete && Math.abs(avatarX - roverDoor) <= 12) return 'Board rover';
-    if (!researchComplete && Math.abs(avatarX - stationDoor) <= 15) return 'Enter Research Station';
+    if (canBoardRover()) return 'Board rover';
+    if (canEnterStation()) return 'Enter Research Station';
     return '';
+  }
+
+  function jumpAtStation() {
+    if (phase !== 'driving' || !atStation || stepOutTime < stepOutDuration || avatarJumpVelocity || avatarJumpHeight) return;
+    avatarJumpVelocity = jumpSpeed;
+    SFX.play('jump');
   }
 
   function moveAtStation(dt) {
     if (stepOutTime < stepOutDuration) {
       stepOutTime = Math.min(stepOutDuration, stepOutTime + dt);
       const progress = stepOutTime / stepOutDuration;
-      avatarX = destination + 25 + (roverDoor - destination - 25) * progress;
-      avatarStride = avatarX - destination;
+      avatarX = roverExitStart + (roverDoor - roverExitStart) * progress;
+      avatarStride = roverExitStart - avatarX;
       avatarWalking = progress < 1;
       if (!avatarWalking) configureControls();
     } else {
@@ -558,6 +736,15 @@ function createRoverDrive(onExit) {
         avatarFacing = direction;
       }
       avatarX = nextX;
+      if (avatarJumpVelocity || avatarJumpHeight) {
+        avatarJumpHeight += (avatarJumpVelocity - jumpGravity * dt / 2) * dt;
+        avatarJumpVelocity -= jumpGravity * dt;
+        if (avatarJumpHeight <= 0 && avatarJumpVelocity <= 0) {
+          avatarJumpHeight = 0;
+          avatarJumpVelocity = 0;
+          SFX.play('land');
+        }
+      }
     }
     const label = stationActionLabel();
     siteAction.hidden = !label;
@@ -571,6 +758,7 @@ function createRoverDrive(onExit) {
     if (researchComplete) {
       input.clear();
       atStation = false;
+      heading = -1;
       cruising = true;
       speed = 0;
       phase = 'entering';
@@ -648,19 +836,24 @@ function createRoverDrive(onExit) {
 
     if (!drive.hidden && researchTask.hidden) {
       const previousDistance = distance;
+      let pedal = 0;
       if (atStation && phase === 'driving') moveAtStation(dt);
       else if (!atStation && phase === 'driving') {
-        const pedal = [...input.values()].at(-1) ?? (cruising ? 1 : 0);
+        pedal = [...input.values()].at(-1) ?? (cruising ? 1 : 0);
         // Route A: the steep hill forces a slow crawl, and the wheels slip on the way up.
         const steepRoad = Boolean(routeChoice && !routeChoice.avoidedHill
-          && distance >= hillStart - 40 && distance <= hillEnd + 40);
-        const climbing = steepRoad && (heading === 1 ? distance < hillCenter : distance > hillCenter);
+          && distance >= steepStart - 40 && distance <= steepEnd + 40);
+        const climbing = steepRoad && (heading === 1 ? distance < steepCenter : distance > steepCenter);
         const slip = climbing ? .7 + .3 * Math.sin(now / 170) : 1;
-        const topSpeed = steepRoad ? 80 * slip : 145;
-        const targetSpeed = heading * (pedal < 0 ? -Math.min(86, topSpeed) : pedal * Math.min(topSpeed, cruising ? 110 : 145));
+        const topSpeed = steepRoad ? 80 * slip : Infinity;
         const detour = Boolean(routeChoice?.avoidedHill && distance > routeFork + 40 && distance < destination - 120);
-        const delta = targetSpeed - speed;
-        speed += Math.sign(delta) * Math.min(Math.abs(delta), 310 * dt);
+        if (pedal === 0) {
+          speed = coastWithGravity(dt);
+        } else {
+          const targetSpeed = heading * (pedal < 0 ? -Math.min(86, topSpeed) : Math.min(cruising ? 110 : 145, topSpeed));
+          const delta = targetSpeed - speed;
+          speed += Math.sign(delta) * Math.min(Math.abs(delta), 310 * dt);
+        }
         distance = Math.max(heading === 1 ? 105 : departure, Math.min(destination, distance + speed * dt));
         if (heading === 1 && !routeChoice && distance >= routeFork) openRouteChoice();
         else if (heading === 1 && distance === destination) stopAtStation();
@@ -671,21 +864,21 @@ function createRoverDrive(onExit) {
           const message = steepRoad
             ? (climbing ? 'Steep climb! The wheels are slipping. Take it slow.' : 'Steep way down. Ease off the speed.')
             : detour ? 'Driving around the hill. A longer road, but gentle and safe.'
-            : heading === 1 && routeChoice && !routeChoice.avoidedHill && distance < hillStart
+            : heading === 1 && routeChoice && !routeChoice.avoidedHill && distance < steepStart
               ? 'Heading straight for the steep hill.'
-            : heading === 1 ? 'Find the lost research bot.' : 'Drive back to the outpost.';
+            : heading === 1 ? outboundObjective : 'Drive back to the outpost.';
           if (objective.textContent !== message) objective.textContent = message;
         }
         if ((distance <= departure && speed < 0 && heading === -1)
           || (distance === 105 && speed < 0) || (distance === destination && speed > 0)) speed = 0;
       }
-      // Rover motor: louder and higher-pitched the faster it drives.
       const motorOn = !atStation && phase === 'driving';
-      if (motorOn && !engineSound) engineSound = SFX.loop('engine', 0.3);
-      if (!motorOn && engineSound) stopEngine();
-      engineSound?.set(0.3 + Math.min(1, Math.abs(speed) / 145) * 0.7);
-      updateDust(dt, distance - previousDistance);
-      paint();
+      if (motorOn) updateEngine(pedal, dt);
+      else if (engineSound) stopEngine();
+      const traveled = distance - previousDistance;
+      wheelTravel += Math.sign(traveled) * Math.hypot(traveled, groundAt(distance) - groundAt(previousDistance));
+      updateDust(dt, traveled);
+      paint(now);
     }
     frameId = requestAnimationFrame(update);
   }
@@ -710,6 +903,7 @@ function createRoverDrive(onExit) {
     pedal.addEventListener('blur', () => input.delete(pedal));
   }
   exit.addEventListener('click', beginExit);
+  jump.addEventListener('click', jumpAtStation);
   siteAction.addEventListener('click', interactAtStation);
   window.addEventListener('message', event => {
     if (researchTask.hidden || event.source !== researchTask.contentWindow) return;
@@ -730,11 +924,19 @@ function createRoverDrive(onExit) {
     if (event.data !== 'mission-trainer:research-task-complete') return;
     closeResearchTask();
     researchComplete = true;
+    clearInput();
     SFX.play('success');
-    heading = -1;
     objective.textContent = 'Research complete. Walk back to the rover.';
     drive.focus({ preventScroll: true });
   });
+
+  const prepareDriveArt = () => window.requestIdleCallback?.(() => {
+    if (!outpost.naturalWidth) return;
+    if (!roadSprite) prepareRoad();
+    if (!chassisSprite) prepareRoverSprites();
+  });
+  if (outpost.complete) prepareDriveArt();
+  else outpost.addEventListener('load', prepareDriveArt, { once: true });
 
   return {
     get active() { return phase !== 'idle'; },
@@ -744,6 +946,7 @@ function createRoverDrive(onExit) {
       SFX.play('hatch');
       phase = 'entering';
       distance = departure;
+      wheelTravel = 0;
       speed = 0;
       dust.length = 0;
       dustInterval = 0;
@@ -751,10 +954,12 @@ function createRoverDrive(onExit) {
       heading = 1;
       atStation = false;
       researchComplete = false;
-      routeChoice = null;
-      layoutTrack(shortDestination);
+      if (routeChoice) {
+        routeChoice = null;
+        layoutTrack(shortDestination);
+      }
       cruising = true;
-      objective.textContent = 'Find the lost research bot.';
+      objective.textContent = outboundObjective;
       configureControls();
       fade.style.opacity = reducedMotion.matches ? 1 : 0;
       fade.hidden = false;
@@ -771,6 +976,10 @@ function createRoverDrive(onExit) {
       } else if (event.code === 'KeyE' && atStation) {
         event.preventDefault();
         if (!event.repeat) interactAtStation();
+      } else if (atStation && (event.code === 'Space' || event.code === 'ArrowUp' || event.code === 'KeyW')) {
+        if (event.code === 'Space' && event.target.closest('button')) return;
+        event.preventDefault();
+        if (!event.repeat) jumpAtStation();
       } else {
         const directions = atStation ? walkingDirections : keyboardDirections;
         if (!(event.code in directions)) return;
