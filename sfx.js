@@ -69,6 +69,29 @@ const SFX = (() => {
     else ctx.resume().catch(() => {});
   });
 
+  // Gritty distortion + bit-crusher bus, for rough industrial sounds.
+  let crusherBus = null;
+  function crusher() {
+    if (crusherBus) return crusherBus;
+    const shaper = ctx.createWaveShaper();
+    const curve = new Float32Array(2048);
+    for (let i = 0; i < curve.length; i++) {
+      const x = (i / 1024 - 1) * 6;
+      // Hard-driven clipping, then coarse steps so it sounds like a low-bit sample.
+      curve[i] = Math.round(Math.tanh(x) * 7) / 7;
+    }
+    shaper.curve = curve;
+    shaper.oversample = 'none';
+    const tame = ctx.createBiquadFilter();
+    tame.type = 'lowpass';
+    tame.frequency.value = 5200;
+    const level = ctx.createGain();
+    level.gain.value = 0.32;
+    shaper.connect(tame).connect(level).connect(master);
+    crusherBus = shaper;
+    return crusherBus;
+  }
+
   // Route through a stereo panner when a sound should come from one side.
   function panned(out, pan) {
     if (!pan || !ctx.createStereoPanner) return out;
@@ -125,26 +148,37 @@ const SFX = (() => {
     blip: ({ pitch = 1 } = {}) => tone({ type: 'triangle', freq: 1046 * pitch, dur: 0.07, gain: 0.14 }),
     close: () => tone({ type: 'triangle', freq: 780, to: 420, dur: 0.1, gain: 0.12 }),
     denied: () => notes([196, 165], { type: 'square', dur: 0.13, gain: 0.09, gap: 0.12 }),
-    // Chapter title card. Big "SOL 01" letters stamp in on a rising scale...
+    // Chapter title card: rough and industrial. Everything goes through a gritty crusher.
+    // Big "SOL 01" letters slam down like a hydraulic metal press, dropping in pitch...
     titleStamp: ({ index = 0 } = {}) => {
-      const scale = [262, 330, 392, 440, 523, 659, 784];
-      const freq = scale[Math.min(index, scale.length - 1)];
-      tone({ type: 'square', freq, dur: 0.11, gain: 0.09 });
-      tone({ type: 'square', freq: freq * 2, dur: 0.05, gain: 0.04 });
-      tone({ type: 'sine', freq: 150, to: 55, dur: 0.14, gain: 0.3 });
-      noise({ dur: 0.03, gain: 0.12, filter: 'highpass', freq: 4000 });
+      const out = crusher();
+      const root = [98, 92, 87, 82, 73, 65][Math.min(index, 5)];
+      tone({ out, type: 'sawtooth', freq: root * 2, to: root, dur: 0.22, gain: 0.5 });
+      tone({ out, type: 'square', freq: root * 1.5, to: root * 0.75, dur: 0.16, gain: 0.35 });
+      tone({ type: 'sine', freq: 120, to: 38, dur: 0.35, gain: 0.55 });
+      noise({ out, dur: 0.12, gain: 0.9, filter: 'lowpass', freq: 2400, to: 300 });
+      noise({ dur: 0.05, gain: 0.3, filter: 'highpass', freq: 3500 });
+      for (const [freq, gain] of [[ vary(410, 0.04), 0.05 ], [ vary(1130, 0.04), 0.03 ]]) {
+        tone({ type: 'triangle', freq, dur: 0.35, gain, delay: 0.01 });
+      }
     },
-    // ...the chapter name types out with lighter, alternating 8-bit blips...
+    // ...the chapter name hammers out on a harsh, crunchy teletype...
     titleType: ({ index = 0 } = {}) => {
-      const freq = index % 2 ? 1568 : 1319;
-      tone({ type: 'square', freq: vary(freq, 0.02), dur: 0.035, gain: 0.045 });
-      tone({ type: 'triangle', freq: freq / 2, dur: 0.05, gain: 0.05 });
+      const out = crusher();
+      noise({ out, dur: 0.045, gain: 0.7, freq: vary(1800, 0.15), q: 2.5, attack: 0.001 });
+      tone({ out, type: 'square', freq: index % 2 ? 140 : 165, dur: 0.05, gain: 0.25 });
+      tone({ type: 'sine', freq: 90, to: 60, dur: 0.06, gain: 0.15 });
     },
-    // ...and a bright chime lands when the full title is on screen.
+    // ...and the finished title lands with a distorted low power chord and rumble.
     titleSting: () => {
-      notes([523, 659, 784], { type: 'triangle', dur: 0.9, gain: 0.1, gap: 0.07 });
-      notes([1046, 1568], { type: 'sine', dur: 1.3, gain: 0.05, gap: 0.1, delay: 0.2 });
-      noise({ dur: 0.6, gain: 0.04, filter: 'highpass', freq: 6000, attack: 0.1, delay: 0.15 });
+      const out = crusher();
+      for (const freq of [55, 82.5, 110]) {
+        tone({ out, type: 'sawtooth', freq, dur: 1.6, gain: 0.22, attack: 0.01 });
+        tone({ out, type: 'sawtooth', freq: freq * 1.006, dur: 1.6, gain: 0.15, attack: 0.01 });
+      }
+      tone({ type: 'sine', freq: 55, to: 40, dur: 1.4, gain: 0.45 });
+      noise({ out, dur: 1.2, gain: 0.35, filter: 'lowpass', freq: 1200, to: 150, attack: 0.02 });
+      noise({ dur: 0.08, gain: 0.35, filter: 'highpass', freq: 3000 });
     },
     page: () => noise({ dur: 0.18, gain: 0.12, filter: 'highpass', freq: 2500, to: 5000 }),
 
