@@ -100,3 +100,60 @@
   }
   render();
 })();
+
+// Dr. Ian pops up when the Mission PC switches on.
+(() => {
+  const pc = document.getElementById("console");
+  const coach = document.getElementById("pc-coach");
+  const copy = document.getElementById("pc-coach-copy");
+  const close = document.getElementById("pc-coach-close");
+  const firstHello = "Whoa, you switched me on! Hi, I'm Dr. Ian. This Mission PC shows how our base is doing. Tap any reading to learn what it means.";
+  const welcomeBack = [
+    "Welcome back! Let's check on the base.",
+    "Good to see you again. Everything's on screen.",
+    "Back at the controls? Let's take a look."
+  ];
+  const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
+  let greeted = false;
+  let typing = 0;
+  let hideTimer = 0;
+
+  function hide(animate = true) {
+    window.clearTimeout(typing);
+    window.clearTimeout(hideTimer);
+    if (coach.hidden) return;
+    if (!animate || reducedMotion.matches) {
+      coach.hidden = true;
+      coach.classList.remove("is-leaving");
+      return;
+    }
+    coach.classList.add("is-leaving");
+    hideTimer = window.setTimeout(() => {
+      coach.hidden = true;
+      coach.classList.remove("is-leaving");
+    }, 300);
+  }
+
+  function greet() {
+    hide(false);
+    const message = greeted ? welcomeBack[Math.floor(Math.random() * welcomeBack.length)] : firstHello;
+    greeted = true;
+    coach.hidden = false;
+    copy.textContent = "";
+    SFX.play("chime");
+    let shown = 0;
+    const type = () => {
+      shown = reducedMotion.matches ? message.length : shown + 1;
+      copy.textContent = message.slice(0, shown);
+      if (shown % 3 === 1 && message[shown - 1] !== " ") SFX.play("titleType", { index: shown });
+      if (shown < message.length) typing = window.setTimeout(type, 28);
+      else hideTimer = window.setTimeout(hide, 6500);
+    };
+    // Let the PC finish booting before Dr. Ian starts talking.
+    typing = window.setTimeout(type, reducedMotion.matches ? 0 : 450);
+  }
+
+  close.addEventListener("click", () => hide());
+  new MutationObserver(() => (pc.hidden ? hide(false) : greet()))
+    .observe(pc, { attributes: true, attributeFilter: ["hidden"] });
+})();
