@@ -142,7 +142,10 @@
     $('return-tasks').hidden = true;
     $('continue-drive').addEventListener('click', () => {
       SFX.play('select');
-      window.parent.postMessage({ type: 'mission-trainer:route-chosen', route: chosen.id, avoidedHill: chosen === gentle }, '*');
+      // lengthRatio: how much longer this road is than the shortest one (1 for the shortest).
+      const shortest = Math.min(...routes.map(route => route.distanceKm));
+      const lengthRatio = both('distanceKm') ? chosen.distanceKm / shortest : undefined;
+      window.parent.postMessage({ type: 'mission-trainer:route-chosen', route: chosen.id, avoidedHill: chosen === gentle, lengthRatio }, '*');
     });
   } else {
     window.addEventListener('keydown', event => {

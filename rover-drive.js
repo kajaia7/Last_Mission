@@ -22,14 +22,15 @@ function createRoverDrive(onExit) {
   const height = 200;
   ctx.scale(canvas.width / width, canvas.height / height);
   ctx.imageSmoothingEnabled = true;
-  const craterStart = 810;
-  const craterEnd = 1200;
-  const destination = 1780;
-  const stationDoor = destination + 220;
+  // Route A's steep hill sits right on the road between hillStart and hillEnd.
+  const hillStart = 810;
+  const hillEnd = 1200;
+  const hillCenter = (hillStart + hillEnd) / 2;
+  const hillHeight = 58;
+  // Route B's detour stretches the road after the fork by the real distance ratio.
+  const shortDestination = 1780;
   const stationWidth = 210;
   const stationHeight = 136;
-  const stationLeft = stationDoor - 137;
-  const roverDoor = destination + 55;
   const departure = 115;
   const stepOutDuration = .9;
   const suitHeight = 39;
@@ -59,9 +60,10 @@ function createRoverDrive(onExit) {
   let heading = 1;
   let atStation = false;
   let researchComplete = false;
-  // Route choice before the crater: null until the player picks a road.
-  const routeFork = craterStart - 170;
+  // Route choice before the hill: null until the player picks a road.
+  const routeFork = hillStart - 170;
   let routeChoice = null;
+  let destination, stationDoor, stationLeft, roverDoor, markers;
   let avatarX = 0;
   let avatarFacing = 1;
   let avatarStride = 0;
@@ -73,15 +75,35 @@ function createRoverDrive(onExit) {
   let dustInterval = 0;
   let engineSound = null;
 
+  // Place the research station at the end of the chosen road.
+  function layoutTrack(length) {
+    destination = Math.round(length);
+    stationDoor = destination + 220;
+    stationLeft = stationDoor - 137;
+    roverDoor = destination + 55;
+    markers = [351, 628];
+    for (let x = 797; x < destination - 60; x += 270) markers.push(x);
+    roadSprite = null;
+  }
+  layoutTrack(shortDestination);
+
   function stopEngine() {
     engineSound?.stop();
     engineSound = null;
   }
 
   function groundAt(x) {
-    const progress = Math.max(0, Math.min(1, (x - craterStart) / (craterEnd - craterStart)));
-    const crater = Math.sin(Math.PI * progress);
-    return 144 + crater * crater * 27;
+    if (!routeChoice || x < routeFork) return 144;
+    if (!routeChoice.avoidedHill) {
+      // Route A: straight over a steep hill (about 25 degrees at its steepest on screen).
+      const progress = (x - hillStart) / (hillEnd - hillStart);
+      if (progress <= 0 || progress >= 1) return 144;
+      return 144 - hillHeight * (1 - Math.cos(2 * Math.PI * progress)) / 2;
+    }
+    // Route B: the long way round stays low, with only gentle rolls.
+    const fadeIn = Math.min(1, (x - routeFork) / 140);
+    const fadeOut = Math.max(0, Math.min(1, (destination - 40 - x) / 140));
+    return 144 - 4 * Math.sin((x - routeFork) / 80) ** 2 * fadeIn * fadeOut;
   }
 
   function prepareRoad() {
@@ -132,7 +154,7 @@ function createRoverDrive(onExit) {
       road.fillRect(Math.floor(x), Math.floor(y * 2) / 2, .5 + noise() * 2.6, .5 + noise() * .65);
     }
 
-    // Near rocks follow the slope so the foreground keeps its depth through the crater.
+    // Near rocks follow the slope so the foreground keeps its depth over the hill.
     const rock = new Path2D('M-7 0L-6 -2L-4 -3L-3 -6L1 -7L3 -5L5 -4L7 0Z');
     const rockFace = new Path2D('M-6 -2L-4 -3L-3 -6L1 -7L3 -5L1 -4L-1 -4L-2 -2Z');
     for (let i = 0; i < 620; i++) {
@@ -154,33 +176,78 @@ function createRoverDrive(onExit) {
     }
   }
 
-  function drawCrater(camera) {
-    if (camera > craterEnd || camera + width < craterStart) return;
-    const apron = ctx.createLinearGradient(0, 137, 0, 174);
-    apron.addColorStop(0, '#99474b00');
-    apron.addColorStop(.35, '#98434c');
-    apron.addColorStop(1, '#542f40');
+  // The hill in the distance: ahead of the fork, and off to the side on Route B.
+  function drawDistantHill(camera) {
+    const x = width / 2 + (hillCenter - camera - width / 2) * .55;
+    if (x < -160 || x > width + 160) return;
+    const body = ctx.createLinearGradient(0, 96, 0, 142);
+    body.addColorStop(0, '#c86a57');
+    body.addColorStop(1, '#8e4650');
     ctx.beginPath();
-    ctx.moveTo(craterStart - camera, groundAt(craterStart) - 4);
-    for (let x = craterStart; x <= craterEnd; x += 3) {
-      const wall = (groundAt(x) - 144) * .35;
-      ctx.lineTo(x - camera, 140 + wall + Math.sin(x / 9) * .65);
+    ctx.moveTo(x - 150, 142);
+    for (let dx = -150; dx <= 150; dx += 6) {
+      const t = dx / 150;
+      ctx.lineTo(x + dx, 142 - 44 * (1 - t * t) ** 1.6 + Math.sin(dx / 7) * .8);
     }
-    for (let x = craterEnd; x >= craterStart; x -= 3) ctx.lineTo(x - camera, groundAt(x));
     ctx.closePath();
-    ctx.fillStyle = apron;
+    ctx.fillStyle = body;
     ctx.fill();
-    for (const [depth, color] of [[.52, '#de775964'], [.7, '#5d304d90'], [.84, '#c4665b7b']]) {
+    ctx.fillStyle = '#f3a77f55';
+    ctx.beginPath();
+    ctx.moveTo(x - 70, 142 - 44 * (1 - (70 / 150) ** 2) ** 1.6);
+    ctx.quadraticCurveTo(x - 20, 96, x + 6, 98.5);
+    ctx.lineTo(x - 30, 120);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // Route A: the hill rises right across the road, with rocky layers and a warning sign.
+  function drawRoadHill(camera) {
+    if (camera > hillEnd + 40 || camera + width < hillStart - 40) return;
+    const rock = ctx.createLinearGradient(0, 144 - hillHeight - 8, 0, 150);
+    rock.addColorStop(0, '#d1735a');
+    rock.addColorStop(.5, '#a3504e');
+    rock.addColorStop(1, '#6e3546');
+    ctx.beginPath();
+    ctx.moveTo(hillStart - 30 - camera, 150);
+    for (let x = hillStart - 30; x <= hillEnd + 30; x += 3) {
+      // The hill's rocky shoulder rises above the road that climbs its face.
+      const rise = 144 - groundAt(x);
+      const crest = groundAt(x) - 6 - rise * .45 - (rise > 1 ? Math.abs(Math.sin(x / 11)) * 2.5 : 0);
+      ctx.lineTo(x - camera, crest);
+    }
+    ctx.lineTo(hillEnd + 30 - camera, 150);
+    ctx.closePath();
+    ctx.fillStyle = rock;
+    ctx.fill();
+    for (const [lift, color] of [[.35, '#f19a7466'], [.6, '#5e2f4566'], [.82, '#f6b08955']]) {
       ctx.beginPath();
-      for (let x = craterStart + 26; x <= craterEnd - 26; x += 4) {
-        const y = 140 + (groundAt(x) - 144) * depth + Math.sin(x / 12) * .65;
-        if (x === craterStart + 26) ctx.moveTo(x - camera, y);
+      for (let x = hillStart + 20; x <= hillEnd - 20; x += 4) {
+        const y = 144 - (144 - groundAt(x)) * lift - 4 + Math.sin(x / 13) * .7;
+        if (x === hillStart + 20) ctx.moveTo(x - camera, y);
         else ctx.lineTo(x - camera, y);
       }
       ctx.strokeStyle = color;
-      ctx.lineWidth = .85;
+      ctx.lineWidth = .9;
       ctx.stroke();
     }
+    // Yellow "steep slope" sign at the foot of the hill.
+    const signX = hillStart - 26 - camera;
+    ctx.fillStyle = '#392938';
+    ctx.fillRect(signX - 1, 128, 2, 16);
+    ctx.fillStyle = '#ffd36e';
+    ctx.strokeStyle = '#392938';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(signX, 116);
+    ctx.lineTo(signX + 9, 131);
+    ctx.lineTo(signX - 9, 131);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#392938';
+    ctx.fillRect(signX - .6, 121, 1.2, 5);
+    ctx.fillRect(signX - .6, 127.5, 1.2, 1.2);
   }
 
   function drawLandscape(camera) {
@@ -200,11 +267,12 @@ function createRoverDrive(onExit) {
       }
     }
 
-    drawCrater(camera);
+    if (!routeChoice || routeChoice.avoidedHill) drawDistantHill(camera);
+    else drawRoadHill(camera);
     if (!roadSprite) prepareRoad();
     ctx.drawImage(roadSprite, -camera, 0, roadSprite.width / 2, height);
 
-    for (const marker of [351, 628, 797, 1214, 1470, 1693]) {
+    for (const marker of markers) {
       const x = Math.round(marker - camera);
       if (x < -12 || x > width + 12) continue;
       const y = groundAt(marker) - 2;
@@ -583,11 +651,14 @@ function createRoverDrive(onExit) {
       if (atStation && phase === 'driving') moveAtStation(dt);
       else if (!atStation && phase === 'driving') {
         const pedal = [...input.values()].at(-1) ?? (cruising ? 1 : 0);
-        const inCrater = distance >= craterStart - 65 && distance <= craterEnd + 65;
-        // The steep road forces a slow, careful crawl through the slope.
-        const steepRoad = inCrater && routeChoice && !routeChoice.avoidedHill;
-        const topSpeed = steepRoad ? 55 : 145;
+        // Route A: the steep hill forces a slow crawl, and the wheels slip on the way up.
+        const steepRoad = Boolean(routeChoice && !routeChoice.avoidedHill
+          && distance >= hillStart - 40 && distance <= hillEnd + 40);
+        const climbing = steepRoad && (heading === 1 ? distance < hillCenter : distance > hillCenter);
+        const slip = climbing ? .7 + .3 * Math.sin(now / 170) : 1;
+        const topSpeed = steepRoad ? 80 * slip : 145;
         const targetSpeed = heading * (pedal < 0 ? -Math.min(86, topSpeed) : pedal * Math.min(topSpeed, cruising ? 110 : 145));
+        const detour = Boolean(routeChoice?.avoidedHill && distance > routeFork + 40 && distance < destination - 120);
         const delta = targetSpeed - speed;
         speed += Math.sign(delta) * Math.min(Math.abs(delta), 310 * dt);
         distance = Math.max(heading === 1 ? 105 : departure, Math.min(destination, distance + speed * dt));
@@ -597,11 +668,11 @@ function createRoverDrive(onExit) {
           beginExit();
           if (phase === 'idle') return;
         } else {
-          const message = inCrater
-            ? (steepRoad ? 'Steep slope! The wheels are slipping. Take it slow.'
-              : routeChoice ? 'Gentle road around the hill. Longer, but safe.' : 'Crater ahead. Follow the slope.')
-            : heading === 1 && routeChoice && distance < craterStart
-              ? (routeChoice.avoidedHill ? 'Taking the long way around the hill.' : 'Heading straight for the steep hill.')
+          const message = steepRoad
+            ? (climbing ? 'Steep climb! The wheels are slipping. Take it slow.' : 'Steep way down. Ease off the speed.')
+            : detour ? 'Driving around the hill. A longer road, but gentle and safe.'
+            : heading === 1 && routeChoice && !routeChoice.avoidedHill && distance < hillStart
+              ? 'Heading straight for the steep hill.'
             : heading === 1 ? 'Find the lost research bot.' : 'Drive back to the outpost.';
           if (objective.textContent !== message) objective.textContent = message;
         }
@@ -645,6 +716,10 @@ function createRoverDrive(onExit) {
     if (event.data?.type === 'mission-trainer:route-chosen') {
       closeResearchTask();
       routeChoice = { route: event.data.route, avoidedHill: Boolean(event.data.avoidedHill) };
+      // The road after the fork grows by the real distance ratio between the two routes.
+      const ratio = Number(event.data.lengthRatio);
+      const lengthRatio = Number.isFinite(ratio) && ratio >= 1 ? ratio : (routeChoice.avoidedHill ? 1.45 : 1);
+      layoutTrack(routeFork + (shortDestination - routeFork) * lengthRatio);
       cruising = true;
       objective.textContent = routeChoice.avoidedHill
         ? 'Taking the long way around the hill.'
@@ -677,6 +752,7 @@ function createRoverDrive(onExit) {
       atStation = false;
       researchComplete = false;
       routeChoice = null;
+      layoutTrack(shortDestination);
       cruising = true;
       objective.textContent = 'Find the lost research bot.';
       configureControls();
