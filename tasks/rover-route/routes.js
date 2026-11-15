@@ -1,21 +1,27 @@
-// ROUTE DATA: fill this in from NASA Mars Trek (https://trek.nasa.gov/mars/).
-// Step-by-step guide: https://www.jpl.nasa.gov/edu/resources/project/map-a-mars-rover-driving-route/
+// ROUTE DATA: real measurements from NASA Mars Trek (https://trek.nasa.gov/mars/).
+// Method follows NASA JPL's guide:
+// https://www.jpl.nasa.gov/edu/resources/project/map-a-mars-rover-driving-route/
 //
-// 1. In Mars Trek, go to Jezero Crater and pick ONE start point and ONE finish point.
-// 2. Draw two paths between them:
-//      Route A goes straight OVER a steep hill (shorter).
-//      Route B goes AROUND the hill (longer, gentler).
-// 3. For each path, use the distance tool for "distanceKm" and the elevation
-//    profile for "maxSlopeDeg" (steepest part) and "climbM" (total uphill).
-// 4. Save a screenshot of each path into tasks/rover-route/assets/
-//    as route-a.png and route-b.png, and write the map layer name you used.
+// Place: an isolated hill on the southern floor of Jezero Crater (hill top
+// near 18.150°N, 77.581°E). Both routes share the same start and finish.
+// Coordinates are in tools/route-paths.json.
 //
-// Leave a value as null until you have measured it. The game shows "—" and a
-// "measurements missing" banner, so made-up numbers never reach the pitch.
+// How the numbers were made (re-run any time):
+//   python tasks/rover-route/tools/measure_routes.py
+// It uses Mars Trek's elevation profile service with the
+// "MGS MOLA and Mars Express HRSC, DEM" height map (about 200 m per pixel).
+// "Steepest part" is the steepest 400 m stretch of the route.
+//
+// Pictures: tasks/rover-route/assets/route-a.png and route-b.png, drawn on the
+// Mars Trek layer "MRO CTX, Jezero Mosaic, Preliminary" by
+// tools/make-pictures.html (served by tools/save_server.py).
 const ROUTE_TASK = {
   place: 'Jezero Crater',
-  start: null,  // e.g. 'Landing site'
-  finish: null, // e.g. 'Delta front'
+  start: 'the west side of the hill',
+  finish: 'the east side of the hill',
+  // NASA JPL: Perseverance's top speed is about 152 meters per hour on flat, hard ground.
+  roverTopSpeedMetersPerHour: 152,
+  elevationLayer: 'MGS MOLA and Mars Express HRSC, DEM',
   routes: [
     {
       id: 'a',
@@ -23,21 +29,21 @@ const ROUTE_TASK = {
       name: 'Over the hill',
       summary: 'Straight over the top. Shorter, but steep.',
       image: 'assets/route-a.png',
-      mapLayer: null,  // the Mars Trek layer shown in the screenshot
-      distanceKm: null,
-      maxSlopeDeg: null,
-      climbM: null
+      mapLayer: 'MRO CTX, Jezero Mosaic, Preliminary',
+      distanceKm: 4.26,
+      maxSlopeDeg: 17.5,
+      climbM: 239
     },
     {
       id: 'b',
       label: 'Route B',
       name: 'Around the hill',
-      summary: 'Curves around the side. Longer, but gentler.',
+      summary: 'Curves around the north side. Longer, but gentler.',
       image: 'assets/route-b.png',
-      mapLayer: null,
-      distanceKm: null,
-      maxSlopeDeg: null,
-      climbM: null
+      mapLayer: 'MRO CTX, Jezero Mosaic, Preliminary',
+      distanceKm: 6.17,
+      maxSlopeDeg: 5.1,
+      climbM: 95
     }
   ]
 };

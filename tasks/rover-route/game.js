@@ -33,7 +33,7 @@
   }
 
   function stat(label, value, unit) {
-    return `<div><dt>${label}</dt><dd>${known(value) ? `${round(value)} ${unit}` : '—'}</dd></div>`;
+    return `<div><dt>${label}</dt><dd>${known(value) ? `${round(value)}${unit === '°' ? '' : ' '}${unit}` : '—'}</dd></div>`;
   }
 
   for (const route of routes) {
@@ -45,7 +45,7 @@
         <div class="route-picture">
           <img src="${route.image}" alt="Mars Trek map of ${route.label}: ${route.name}">
         </div>
-        <figcaption>NASA Mars Trek · Layer: <b>${route.mapLayer ?? '— add layer name'}</b></figcaption>
+        <figcaption>NASA Mars Trek · Layer: <b>${route.mapLayer ?? '— add layer name'}</b>${ROUTE_TASK.elevationLayer ? `<br><span class="caption-note">Heights: ${ROUTE_TASK.elevationLayer}</span>` : ''}</figcaption>
       </figure>
       <div class="route-body">
         <p class="route-label">${route.label}</p>
@@ -77,6 +77,14 @@
         : diff < 0
           ? `<b>${round(-diff)} km shorter</b> than ${other.label} (−${percent}%). Less driving saves time and battery.`
           : `Same distance as ${other.label}.`);
+      // Drive time at the rover's top speed on flat, hard ground (NASA JPL figure).
+      const speed = ROUTE_TASK.roverTopSpeedMetersPerHour;
+      if (known(speed)) {
+        const hours = km => km * 1000 / speed;
+        const extra = hours(route.distanceKm) - hours(other.distanceKm);
+        items.push(`At the rover's top speed of ${speed} m per hour, this road takes about <b>${round(hours(route.distanceKm), 0)} hours</b> of driving`
+          + (Math.abs(extra) >= 0.5 ? ` (${extra > 0 ? `${round(extra, 0)} hours more` : `${round(-extra, 0)} hours less`} than ${other.label}).` : '.'));
+      }
     }
     if (both('maxSlopeDeg')) {
       const steeper = route.maxSlopeDeg > other.maxSlopeDeg;
