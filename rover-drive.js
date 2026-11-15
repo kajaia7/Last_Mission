@@ -59,6 +59,9 @@ function createRoverDrive(onExit) {
   let heading = 1;
   let atStation = false;
   let researchComplete = false;
+  // Route choice before the crater: null until the player picks a road.
+  const routeFork = craterStart - 170;
+  let routeChoice = null;
   let avatarX = 0;
   let avatarFacing = 1;
   let avatarStride = 0;
@@ -519,6 +522,21 @@ function createRoverDrive(onExit) {
     researchTask.focus();
   }
 
+  // Pause at the fork and open the "Choose a Rover Route" task over the drive.
+  function openRouteChoice() {
+    distance = routeFork;
+    speed = 0;
+    clearInput();
+    stopEngine();
+    SFX.play('brake');
+    objective.textContent = 'Two roads ahead. Choose a route.';
+    researchTask.src = 'tasks/rover-route/index.html?from=rover-drive';
+    researchTask.hidden = false;
+    outpostGame.inert = true;
+    topbar.inert = true;
+    researchTask.focus();
+  }
+
   function beginExit() {
     if (phase === 'idle' || phase === 'leaving') return;
     const wasEntering = phase === 'entering' && drive.hidden;
@@ -565,17 +583,25 @@ function createRoverDrive(onExit) {
       if (atStation && phase === 'driving') moveAtStation(dt);
       else if (!atStation && phase === 'driving') {
         const pedal = [...input.values()].at(-1) ?? (cruising ? 1 : 0);
-        const targetSpeed = heading * (pedal < 0 ? -86 : pedal * (cruising ? 110 : 145));
+        const inCrater = distance >= craterStart - 65 && distance <= craterEnd + 65;
+        // The steep road forces a slow, careful crawl through the slope.
+        const steepRoad = inCrater && routeChoice && !routeChoice.avoidedHill;
+        const topSpeed = steepRoad ? 55 : 145;
+        const targetSpeed = heading * (pedal < 0 ? -Math.min(86, topSpeed) : pedal * Math.min(topSpeed, cruising ? 110 : 145));
         const delta = targetSpeed - speed;
         speed += Math.sign(delta) * Math.min(Math.abs(delta), 310 * dt);
         distance = Math.max(heading === 1 ? 105 : departure, Math.min(destination, distance + speed * dt));
-        if (heading === 1 && distance === destination) stopAtStation();
+        if (heading === 1 && !routeChoice && distance >= routeFork) openRouteChoice();
+        else if (heading === 1 && distance === destination) stopAtStation();
         else if (heading === -1 && distance === departure) {
           beginExit();
           if (phase === 'idle') return;
         } else {
-          const inCrater = distance >= craterStart - 65 && distance <= craterEnd + 65;
-          const message = inCrater ? 'Crater ahead. Follow the slope.'
+          const message = inCrater
+            ? (steepRoad ? 'Steep slope! The wheels are slipping. Take it slow.'
+              : routeChoice ? 'Gentle road around the hill. Longer, but safe.' : 'Crater ahead. Follow the slope.')
+            : heading === 1 && routeChoice && distance < craterStart
+              ? (routeChoice.avoidedHill ? 'Taking the long way around the hill.' : 'Heading straight for the steep hill.')
             : heading === 1 ? 'Find the lost research bot.' : 'Drive back to the outpost.';
           if (objective.textContent !== message) objective.textContent = message;
         }
@@ -615,8 +641,18 @@ function createRoverDrive(onExit) {
   exit.addEventListener('click', beginExit);
   siteAction.addEventListener('click', interactAtStation);
   window.addEventListener('message', event => {
-    if (researchTask.hidden || event.source !== researchTask.contentWindow
-      || event.data !== 'mission-trainer:research-task-complete') return;
+    if (researchTask.hidden || event.source !== researchTask.contentWindow) return;
+    if (event.data?.type === 'mission-trainer:route-chosen') {
+      closeResearchTask();
+      routeChoice = { route: event.data.route, avoidedHill: Boolean(event.data.avoidedHill) };
+      cruising = true;
+      objective.textContent = routeChoice.avoidedHill
+        ? 'Taking the long way around the hill.'
+        : 'Heading straight over the steep hill.';
+      drive.focus({ preventScroll: true });
+      return;
+    }
+    if (event.data !== 'mission-trainer:research-task-complete') return;
     closeResearchTask();
     researchComplete = true;
     SFX.play('success');
@@ -640,6 +676,7 @@ function createRoverDrive(onExit) {
       heading = 1;
       atStation = false;
       researchComplete = false;
+      routeChoice = null;
       cruising = true;
       objective.textContent = 'Find the lost research bot.';
       configureControls();
