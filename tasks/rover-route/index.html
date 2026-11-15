@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#392731">
+  <meta name="description" content="Compare two real Mars Trek rover paths near Jezero Crater and choose the one that avoids the steep hill.">
+  <title>Choose a Rover Route · Jezero Crater</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script defer src="../../sfx.js"></script>
+  <script defer src="./routes.js"></script>
+  <script defer src="./game.js"></script>
+</head>
+<body>
+  <main class="route-task task-frame" aria-labelledby="route-title">
+    <header class="route-header">
+      <p class="eyebrow">NASA MARS TREK · <span id="place">JEZERO CRATER</span></p>
+      <h1 id="route-title">Which road should the rover take?</h1>
+      <p class="route-intro">Two roads lead to the same place<span id="endpoints"></span>. One climbs over a steep hill. The other goes around it and takes longer.</p>
+      <p class="route-goal"><span class="goal-tag">GOAL</span> Get the rover there without driving over the steep hill.</p>
+    </header>
+
+    <p class="data-warning" id="data-warning" role="note" hidden>
+      Mars Trek measurements are missing. Add them in <code>tasks/rover-route/routes.js</code> before the pitch.
+    </p>
+
+    <section class="route-cards" id="route-cards" aria-label="Route options"></section>
+
+    <section class="route-feedback" id="feedback" aria-live="polite" hidden>
+      <p class="feedback-kicker" id="feedback-kicker"></p>
+      <h2 id="feedback-title"></h2>
+      <ul class="feedback-costs" id="feedback-costs"></ul>
+      <div class="feedback-actions">
+        <button type="button" class="secondary" id="try-other">Try the other route</button>
+        <button type="button" class="primary" id="continue-drive" hidden>Continue driving →</button>
+        <a class="task-return" id="return-tasks" href="../../index.html#tasks">← Back to tasks</a>
+      </div>
+    </section>
+
+    <p class="slope-help">Slope means how steep the ground is. <b>0°</b> is flat ground; the bigger the number, the steeper the climb.</p>
+  </main>
+</body>
+</html>

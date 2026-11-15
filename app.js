@@ -115,7 +115,7 @@ let baseAirlockSeen = false;
 let airlockTimer;
 let airlockDrag;
 let suppressLeverClick = false;
-let thrustSound = null;
+let landingSound = null;
 let airShowerSound = null;
 
 // Opening/closing a hatch or door plays a pressurized hiss.
@@ -239,8 +239,6 @@ function changeScene(nextRoom, startingDeck = 'storage') {
 function finishLanding() {
   if (landingSequence.hidden || location.hash !== '#chapter-1') return;
   landingSequence.hidden = true;
-  thrustSound?.stop(0.6);
-  thrustSound = null;
   showLandingAchievement();
   hasLanded = true;
   pilotExit = { hopAt: performance.now() + pilotSeatPause };
@@ -410,8 +408,8 @@ outpostGame.addEventListener('chapterchange', event => {
       touchControls.hidden = false;
     }
     landingSequence.hidden = true;
-    thrustSound?.stop();
-    thrustSound = null;
+    landingSound?.stop();
+    landingSound = null;
     if (!lifeSupport.hidden) setConsole(false);
     if (pilotExit) {
       finishPilotExit();
@@ -430,22 +428,19 @@ outpostGame.addEventListener('chapterchange', event => {
   astronaut.hidden = true;
   astronautShadow.hidden = true;
   touchControls.hidden = true;
-  // Rocket engines roar during the descent.
-  thrustSound?.stop();
-  thrustSound = SFX.loop('thrust', 0.9);
+  // Scripted landing soundtrack, timed to the descent animation.
+  landingSound?.stop();
+  const landingDuration = getComputedStyle(landingSequence).getPropertyValue('--landing-duration').trim();
+  landingSound = SFX.sequence('landing', {
+    duration: landingDuration.endsWith('ms') ? parseFloat(landingDuration) / 1000 : parseFloat(landingDuration) || 3.6
+  });
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) finishLanding();
 });
 landingCraft.addEventListener('animationend', event => {
   if (event.target === landingCraft) finishLanding();
 });
 landingSequence.addEventListener('animationend', event => {
-  if (event.animationName === 'show-settled-outpost') {
-    // Engines cut at touchdown.
-    thrustSound?.stop(0.5);
-    thrustSound = null;
-    SFX.play('touchdown');
-    showLandingAchievement();
-  }
+  if (event.animationName === 'show-settled-outpost') showLandingAchievement();
 });
 
 function climbLadder() {

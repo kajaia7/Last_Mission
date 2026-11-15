@@ -1,0 +1,11 @@
+{
+  "_about": "Route coordinates (longitude, latitude in degrees) on the floor of Jezero Crater, Mars. Both routes share the same start and finish. Measured with tools/measure_routes.py; pictures drawn with tools/make-pictures.html.",
+  "start": [77.555, 18.150],
+  "finish": [77.625, 18.150],
+  "hill": [77.5807, 18.150],
+  "routes": {
+    "a": [[77.555, 18.150], [77.625, 18.150]],
+    "b": [[77.555, 18.150], [77.563, 18.172], [77.580, 18.183], [77.600, 18.183], [77.616, 18.172], [77.625, 18.150]]
+  },
+  "view": { "west": 77.540, "east": 77.640, "south": 18.1244, "north": 18.1956 }
+}

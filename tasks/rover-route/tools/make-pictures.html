@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Rover route pictures (dev tool)</title>
+  <style>
+    body { margin: 20px; background: #1b1418; color: #f3dcc0; font: 15px system-ui, sans-serif; }
+    canvas { display: block; max-width: 100%; margin: 10px 0 24px; border: 1px solid #7a5548; }
+    button { font: inherit; padding: 8px 14px; }
+    #status { color: #9ce6d3; }
+  </style>
+  <script src="../routes.js"></script>
+</head>
+<body>
+  <h1>Rover route pictures</h1>
+  <p>Draws each route from <code>route-paths.json</code> onto NASA Mars Trek's
+    <b>MRO CTX, Jezero Mosaic, Preliminary</b> map tiles, with the numbers from <code>../routes.js</code>.
+    Run <code>python tasks/rover-route/tools/save_server.py</code>, open this page through it, then press Save.</p>
+  <button id="save" type="button" disabled>Save route-a.png and route-b.png</button>
+  <span id="status">Loading Mars Trek tiles…</span>
+  <div id="out"></div>
+  <script>
+    // Mars Trek WMTS layer (equirectangular, 256 px tiles, level 12 = about 10 m per pixel).
+    const TILE_URL = 'https://trek.nasa.gov/tiles/Mars/EQ/Jezero_CTX_BlockAdj_dd/1.0.0//default/default028mm';
+    const LAYER = 'MRO CTX, Jezero Mosaic, Preliminary';
+    const LEVEL = 12;
+    const DEG_PER_TILE = 180 / 2 ** LEVEL;
+    const W = 1200, H = 900;
+    const COLORS = { a: '#ff8a5c', b: '#7fe0a8' };
+    const MARS_M_PER_DEG = 2 * Math.PI * 3390000 / 360;
+
+    const loadImage = src => new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('Tile failed: ' + src));
+      img.src = src;
+    });
+
+    async function baseMap(view) {
+      // Stitch the Mars Trek tiles that cover the view, then crop to it.
+      const col0 = Math.floor((view.west + 180) / DEG_PER_TILE), col1 = Math.floor((view.east + 180) / DEG_PER_TILE);
+      const row0 = Math.floor((90 - view.north) / DEG_PER_TILE), row1 = Math.floor((90 - view.south) / DEG_PER_TILE);
+      const mosaic = document.createElement('canvas');
+      mosaic.width = (col1 - col0 + 1) * 256;
+      mosaic.height = (row1 - row0 + 1) * 256;
+      const m = mosaic.getContext('2d');
+      const jobs = [];
+      for (let row = row0; row <= row1; row++) for (let col = col0; col <= col1; col++) {
+        jobs.push(loadImage(`${TILE_URL}/${LEVEL}/${row}/${col}.png`).then(img => m.drawImage(img, (col - col0) * 256, (row - row0) * 256)));
+      }
+      await Promise.all(jobs);
+      const pxPerDeg = 256 / DEG_PER_TILE;
+      return {
+        image: mosaic,
+        sx: ((view.west + 180) / DEG_PER_TILE - col0) * 256,
+        sy: ((90 - view.north) / DEG_PER_TILE - row0) * 256,
+        sw: (view.east - view.west) * pxPerDeg,
+        sh: (view.north - view.south) * pxPerDeg
+      };
+    }
+
+    function draw(base, paths, route) {
+      const { view } = paths;
+      const canvas = document.createElement('canvas');
+      canvas.width = W; canvas.height = H;
+      const c = canvas.getContext('2d');
+      const px = ([lon, lat]) => [(lon - view.west) / (view.east - view.west) * W, (view.north - lat) / (view.north - view.south) * H];
+      c.imageSmoothingQuality = 'high';
+      c.drawImage(base.image, base.sx, base.sy, base.sw, base.sh, 0, 0, W, H);
+      c.fillStyle = '#2a140f33';
+      c.fillRect(0, 0, W, H);
+
+      const line = (points, color, width, dash = []) => {
+        c.save();
+        c.setLineDash(dash);
+        c.lineJoin = c.lineCap = 'round';
+        c.beginPath();
+        points.map(px).forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y)));
+        c.strokeStyle = '#1b0e0bcc'; c.lineWidth = width + 6; c.stroke();
+        c.strokeStyle = color; c.lineWidth = width; c.stroke();
+        c.restore();
+      };
+      const label = (text, x, y, color = '#fff3dc', size = 26, align = 'left') => {
+        c.font = `700 ${size}px system-ui, sans-serif`;
+        c.textAlign = align;
+        c.lineWidth = 6; c.strokeStyle = '#1b0e0bdd'; c.strokeText(text, x, y);
+        c.fillStyle = color; c.fillText(text, x, y);
+      };
+
+      // The other route faintly for context, then this route bold.
+      const other = route.id === 'a' ? 'b' : 'a';
+      line(paths.routes[other], '#fff3dc88', 4, [10, 12]);
+      line(paths.routes[route.id], COLORS[route.id], 9);
+
+      // Hill summit marker.
+      const [hx, hy] = px(paths.hill);
+      c.fillStyle = '#ffd36e'; c.strokeStyle = '#1b0e0b'; c.lineWidth = 3;
+      c.beginPath(); c.moveTo(hx, hy - 20); c.lineTo(hx + 18, hy + 12); c.lineTo(hx - 18, hy + 12); c.closePath(); c.fill(); c.stroke();
+      label('Steep hill', hx, hy + 44, '#ffd36e', 24, 'center');
+
+      // Start and finish.
+      for (const [point, text] of [[paths.start, 'START'], [paths.finish, 'FINISH']]) {
+        const [x, y] = px(point);
+        c.beginPath(); c.arc(x, y, 14, 0, Math.PI * 2);
+        c.fillStyle = '#fff3dc'; c.fill(); c.lineWidth = 4; c.strokeStyle = '#1b0e0b'; c.stroke();
+        label(text, x, y + 46, '#fff3dc', 24, 'center');
+      }
+
+      // Title box.
+      const stats = `${route.distanceKm} km · steepest ${route.maxSlopeDeg}° · climbs ${route.climbM} m`;
+      c.fillStyle = '#1b0e0bcc'; c.fillRect(24, 24, 560, 92);
+      c.fillStyle = COLORS[route.id]; c.fillRect(24, 24, 8, 92);
+      label(`${route.label}: ${route.name}`, 48, 64, '#fff3dc', 30);
+      label(stats, 48, 100, COLORS[route.id], 22);
+
+      // Scale bar (1 km) and north arrow.
+      const metersPerPx = (view.east - view.west) * MARS_M_PER_DEG * Math.cos(((view.north + view.south) / 2) * Math.PI / 180) / W;
+      const bar = 1000 / metersPerPx;
+      c.fillStyle = '#1b0e0bcc'; c.fillRect(24, H - 78, bar + 40, 54);
+      c.fillStyle = '#fff3dc'; c.fillRect(44, H - 44, bar, 8);
+      label('1 km', 44, H - 52, '#fff3dc', 18);
+      label('N ↑', W - 36, 56, '#fff3dc', 26, 'right');
+
+      // Credit line.
+      c.fillStyle = '#1b0e0bcc'; c.fillRect(W - 640, H - 44, 620, 30);
+      label(`NASA Mars Trek · ${LAYER}`, W - 30, H - 22, '#f3dcc0', 16, 'right');
+      return canvas;
+    }
+
+    (async () => {
+      try {
+        const paths = await (await fetch('route-paths.json')).json();
+        const base = await baseMap(paths.view);
+        const pictures = ROUTE_TASK.routes.map(route => ({ route, canvas: draw(base, paths, route) }));
+        for (const { canvas } of pictures) document.getElementById('out').append(canvas);
+        document.getElementById('status').textContent = 'Ready.';
+        const save = document.getElementById('save');
+        save.disabled = false;
+        save.addEventListener('click', async () => {
+          for (const { route, canvas } of pictures) {
+            const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+            const response = await fetch(`/__save/route-${route.id}.png`, { method: 'POST', body: blob });
+            if (!response.ok) throw new Error('Save failed: ' + response.status);
+          }
+          document.getElementById('status').textContent = 'Saved to tasks/rover-route/assets/.';
+        });
+      } catch (error) {
+        document.getElementById('status').textContent = String(error);
+      }
+    })();
+  </script>
+</body>
+</html>
