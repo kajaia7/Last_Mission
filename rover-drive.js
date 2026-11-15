@@ -63,7 +63,7 @@ function createRoverDrive(onExit) {
   const tireDiameter = 86;
   const tireFaceRatio = .84;
   // The original wheel art, traced from the outpost's middle wheel.
-  const tireArt = { x: 1493, y: 590, width: 105, height: 88, hubX: 66, hubY: 43 };
+  const tireArt = { x: 1493, y: 590, width: 105, height: 88, hubX: 66, hubY: 43, faceX: 32, faceY: 41 };
   const terrainScale = 2;
   const tires = [
     { x: 39, mount: 36, radius: 9.8, phase: .4 },
@@ -97,6 +97,7 @@ function createRoverDrive(onExit) {
   let dustInterval = 0;
   let engineSound = null;
   let reverseAlertTime = 0;
+  let squeakTimer = 1;
 
   // Place the research station at the end of the chosen road.
   function layoutTrack(length) {
@@ -116,8 +117,10 @@ function createRoverDrive(onExit) {
     reverseAlertTime = 0;
   }
 
+  // Electric rover drive sound: follows speed and effort, with wheel squeaks
+  // and suspension knocks like NASA's recording of Perseverance driving.
   function updateEngine(pedal, dt) {
-    if (!engineSound) engineSound = SFX.loop('engine', .24);
+    if (!engineSound) engineSound = SFX.loop('roverMotor', .25);
     const roadSpeed = Math.abs(speed);
     const reversing = speed * heading < -7;
     if (reversing) {
@@ -128,18 +131,17 @@ function createRoverDrive(onExit) {
       }
     } else reverseAlertTime = 0;
 
-    const throttle = pedal === 0 ? 0 : cruising ? .3 : 1;
-    // Short automatic gear ranges keep cruise RPM low. More pedal adds converter slip.
-    let rpm;
-    if (reversing) rpm = 780 + roadSpeed * (14 + 8 * throttle);
-    else if (roadSpeed < 29) rpm = 760 + roadSpeed * 65;
-    else if (roadSpeed < 60) rpm = 1550 + (roadSpeed - 29) * 43;
-    else if (roadSpeed < 96) rpm = 1680 + (roadSpeed - 60) * 34;
-    else rpm = 1750 + (roadSpeed - 96) * 23;
-    if (!reversing) rpm += 1060 * throttle * Math.min(1, roadSpeed / 32);
+    const moving = Math.min(1, roadSpeed / 145);
+    // Uphill means the ground ahead is higher (smaller y on screen).
+    const climbing = moving > .05 && groundAt(distance + 20 * heading) < groundAt(distance - 20 * heading) - 1;
+    const effort = pedal === 0 ? 0 : cruising ? .5 : 1;
+    engineSound.set(.25 + .55 * moving + .2 * effort * (climbing ? 1 : .4), { speed: moving, reversing, climbing });
 
-    const load = .24 + .39 * throttle + .19 * roadSpeed / 145;
-    engineSound.set(load, { rpm, reversing });
+    squeakTimer -= dt * moving;
+    if (squeakTimer <= 0) {
+      SFX.play(Math.random() < .6 ? 'roverSqueak' : 'roverClunk');
+      squeakTimer = .6 + Math.random() * 1.6;
+    }
   }
 
   function riseBetween(x, start, end) {
@@ -455,20 +457,24 @@ function createRoverDrive(onExit) {
   }
 
   function drawTire(axle, farSide = false) {
-    // Same motion as before (each wheel rides its own suspension and turns with the
-    // distance it rolls), drawn with the original wheel art and its spinning hub.
+    // Each wheel rides its own suspension and turns with the distance it rolls.
+    // The static art keeps the tire's side band; the whole wheel face (rim, hub and
+    // the tread blocks on its edge) spins on top of it.
     const turn = axle.phase - (reducedMotion.matches ? 0 : wheelTravel * heading / axle.radius);
     const scale = axle.radius * 2 / tireDiameter;
-    const { hubX, hubY } = tireArt;
+    const { hubX, hubY, faceX, faceY } = tireArt;
     ctx.save();
     ctx.translate(axle.centerX, axle.centerY);
     ctx.scale(-scale * heading, scale);
     if (farSide) ctx.filter = 'brightness(.63)';
     ctx.drawImage(tireSprite, -hubX, -hubY);
     ctx.beginPath();
-    ctx.arc(0, 0, 12, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, faceX, faceY, 0, 0, Math.PI * 2);
     ctx.clip();
+    // Rotate in the face's own (foreshortened) plane so the wheel still reads as 3D.
+    ctx.scale(faceX / faceY, 1);
     ctx.rotate(turn);
+    ctx.scale(faceY / faceX, 1);
     ctx.drawImage(tireSprite, -hubX, -hubY);
     ctx.restore();
   }

@@ -69,27 +69,26 @@ const SFX = (() => {
     else ctx.resume().catch(() => {});
   });
 
-  // Gritty distortion + bit-crusher bus, for rough industrial sounds.
-  let crusherBus = null;
-  function crusher() {
-    if (crusherBus) return crusherBus;
-    const shaper = ctx.createWaveShaper();
-    const curve = new Float32Array(2048);
-    for (let i = 0; i < curve.length; i++) {
-      const x = (i / 1024 - 1) * 6;
-      // Hard-driven clipping, then coarse steps so it sounds like a low-bit sample.
-      curve[i] = Math.round(Math.tanh(x) * 7) / 7;
-    }
-    shaper.curve = curve;
-    shaper.oversample = 'none';
-    const tame = ctx.createBiquadFilter();
-    tame.type = 'lowpass';
-    tame.frequency.value = 5200;
-    const level = ctx.createGain();
-    level.gain.value = 0.32;
-    shaper.connect(tame).connect(level).connect(master);
-    crusherBus = shaper;
-    return crusherBus;
+  // Soft echo bus: gives the chapter title sounds a smooth, roomy tail.
+  let echoBus = null;
+  function echo() {
+    if (echoBus) return echoBus;
+    const input = ctx.createGain();
+    const delay = ctx.createDelay(1);
+    delay.delayTime.value = 0.22;
+    const feedback = ctx.createGain();
+    feedback.gain.value = 0.32;
+    const soften = ctx.createBiquadFilter();
+    soften.type = 'lowpass';
+    soften.frequency.value = 2600;
+    const wet = ctx.createGain();
+    wet.gain.value = 0.35;
+    input.connect(master);
+    input.connect(delay);
+    delay.connect(soften).connect(feedback).connect(delay);
+    soften.connect(wet).connect(master);
+    echoBus = input;
+    return echoBus;
   }
 
   // Route through a stereo panner when a sound should come from one side.
@@ -148,37 +147,30 @@ const SFX = (() => {
     blip: ({ pitch = 1 } = {}) => tone({ type: 'triangle', freq: 1046 * pitch, dur: 0.07, gain: 0.14 }),
     close: () => tone({ type: 'triangle', freq: 780, to: 420, dur: 0.1, gain: 0.12 }),
     denied: () => notes([196, 165], { type: 'square', dur: 0.13, gain: 0.09, gap: 0.12 }),
-    // Chapter title card: rough and industrial. Everything goes through a gritty crusher.
-    // Big "SOL 01" letters slam down like a hydraulic metal press, dropping in pitch...
+    // Chapter title card: smooth and calm, like a chapter card in an adventure game.
+    // Big "SOL 01" letters land as soft bell notes climbing a major pentatonic scale...
     titleStamp: ({ index = 0 } = {}) => {
-      const out = crusher();
-      const root = [98, 92, 87, 82, 73, 65][Math.min(index, 5)];
-      tone({ out, type: 'sawtooth', freq: root * 2, to: root, dur: 0.22, gain: 0.5 });
-      tone({ out, type: 'square', freq: root * 1.5, to: root * 0.75, dur: 0.16, gain: 0.35 });
-      tone({ type: 'sine', freq: 120, to: 38, dur: 0.35, gain: 0.55 });
-      noise({ out, dur: 0.12, gain: 0.9, filter: 'lowpass', freq: 2400, to: 300 });
-      noise({ dur: 0.05, gain: 0.3, filter: 'highpass', freq: 3500 });
-      for (const [freq, gain] of [[ vary(410, 0.04), 0.05 ], [ vary(1130, 0.04), 0.03 ]]) {
-        tone({ type: 'triangle', freq, dur: 0.35, gain, delay: 0.01 });
-      }
+      const out = echo();
+      const freq = [392, 440, 523, 587, 659, 784][Math.min(index, 5)];
+      tone({ out, type: 'sine', freq, dur: 0.7, gain: 0.13, attack: 0.008 });
+      tone({ out, type: 'sine', freq: freq * 2, dur: 0.3, gain: 0.035, attack: 0.008 });
+      tone({ out, type: 'triangle', freq: freq / 2, dur: 0.4, gain: 0.05, attack: 0.01 });
+      tone({ type: 'sine', freq: 110, to: 70, dur: 0.2, gain: 0.1, attack: 0.01 });
     },
-    // ...the chapter name hammers out on a harsh, crunchy teletype...
+    // ...the chapter name types out with soft, gentle ticks...
     titleType: ({ index = 0 } = {}) => {
-      const out = crusher();
-      noise({ out, dur: 0.045, gain: 0.7, freq: vary(1800, 0.15), q: 2.5, attack: 0.001 });
-      tone({ out, type: 'square', freq: index % 2 ? 140 : 165, dur: 0.05, gain: 0.25 });
-      tone({ type: 'sine', freq: 90, to: 60, dur: 0.06, gain: 0.15 });
+      tone({ type: 'triangle', freq: vary(index % 2 ? 1760 : 1568, 0.01), dur: 0.06, gain: 0.08, attack: 0.004 });
+      noise({ dur: 0.025, gain: 0.03, filter: 'highpass', freq: 6000 });
     },
-    // ...and the finished title lands with a distorted low power chord and rumble.
+    // ...and the full title settles with a warm, slowly swelling chord and a shimmer.
     titleSting: () => {
-      const out = crusher();
-      for (const freq of [55, 82.5, 110]) {
-        tone({ out, type: 'sawtooth', freq, dur: 1.6, gain: 0.22, attack: 0.01 });
-        tone({ out, type: 'sawtooth', freq: freq * 1.006, dur: 1.6, gain: 0.15, attack: 0.01 });
+      const out = echo();
+      for (const freq of [261.6, 329.6, 392, 493.9, 587.3]) {
+        tone({ out, type: 'sine', freq, dur: 2.2, gain: 0.05, attack: 0.35 });
+        tone({ out, type: 'triangle', freq: freq * 1.004, dur: 2.2, gain: 0.025, attack: 0.4 });
       }
-      tone({ type: 'sine', freq: 55, to: 40, dur: 1.4, gain: 0.45 });
-      noise({ out, dur: 1.2, gain: 0.35, filter: 'lowpass', freq: 1200, to: 150, attack: 0.02 });
-      noise({ dur: 0.08, gain: 0.35, filter: 'highpass', freq: 3000 });
+      notes([1046.5, 1568], { out, type: 'sine', dur: 1.6, gain: 0.022, gap: 0.12, delay: 0.2, attack: 0.05 });
+      noise({ dur: 0.9, gain: 0.04, freq: 400, to: 2000, q: 0.7, attack: 0.3 });
     },
     page: () => noise({ dur: 0.18, gain: 0.12, filter: 'highpass', freq: 2500, to: 5000 }),
 
@@ -238,6 +230,16 @@ const SFX = (() => {
 
     // ---- Rocket and rover ----
     brake: () => noise({ dur: 0.5, gain: 0.12, filter: 'lowpass', freq: 1400, to: 300 }),
+    // Rover wheels: metal wheels squeak and the suspension knocks over rocks.
+    roverSqueak: () => {
+      const freq = vary(2600, 0.3);
+      tone({ type: 'sine', freq, to: freq * 1.08, dur: 0.18, gain: 0.03, attack: 0.02 });
+      tone({ type: 'triangle', freq: freq * 1.5, to: freq * 1.55, dur: 0.12, gain: 0.012, attack: 0.02 });
+    },
+    roverClunk: () => {
+      tone({ type: 'triangle', freq: vary(180, 0.15), to: 120, dur: 0.07, gain: 0.08 });
+      noise({ dur: 0.05, gain: 0.06, freq: 900, q: 1.5 });
+    },
     reverseAlert: () => {
       tone({ type: 'triangle', freq: 760, dur: 0.16, gain: 0.19, attack: 0.01 });
       tone({ type: 'sine', freq: 1520, dur: 0.12, gain: 0.045, attack: 0.01 });
@@ -297,57 +299,62 @@ const SFX = (() => {
       src.start();
       return { amp, max: 0.22, nodes: [src] };
     },
-    engine: () => {
+    // Electric Mars rover drive (no combustion engine): motor and gearbox whine
+    // that rises with speed, grainy wheel crunch on gravel and a low chassis rumble.
+    roverMotor: () => {
       const amp = ctx.createGain();
       amp.gain.value = 0;
       amp.connect(master);
-
-      const exhaust = ctx.createOscillator();
-      exhaust.setPeriodicWave(ctx.createPeriodicWave(
-        new Float32Array([0, .06, -.08, .04, -.035, .02]),
-        new Float32Array([0, 1, .43, .21, .105, .045])
-      ));
-      const exhaustFilter = ctx.createBiquadFilter();
-      exhaustFilter.type = 'lowpass';
-      exhaustFilter.Q.value = .42;
-      exhaust.connect(exhaustFilter).connect(amp);
-
-      const vibration = ctx.createOscillator();
-      vibration.type = 'triangle';
-      const vibrationGain = ctx.createGain();
-      vibration.connect(vibrationGain).connect(amp);
-
-      const breath = ctx.createBufferSource();
-      breath.buffer = noiseBuffer;
-      breath.loop = true;
-      const intake = ctx.createBiquadFilter();
-      intake.type = 'bandpass';
-      intake.Q.value = .8;
-      const intakeGain = ctx.createGain();
-      breath.connect(intake).connect(intakeGain).connect(amp);
-
-      const reverseGear = ctx.createOscillator();
-      reverseGear.type = 'triangle';
-      const reverseGain = ctx.createGain();
-      reverseGain.gain.value = 0;
-      reverseGear.connect(reverseGain).connect(amp);
-
-      const nodes = [exhaust, vibration, breath, reverseGear];
+      const voice = (source, filterType, gain) => {
+        const filter = ctx.createBiquadFilter();
+        filter.type = filterType;
+        const level = ctx.createGain();
+        level.gain.value = 0;
+        source.connect(filter).connect(level).connect(amp);
+        return { filter, level };
+      };
+      const motor = ctx.createOscillator();
+      motor.type = 'sawtooth';
+      const motorVoice = voice(motor, 'bandpass');
+      motorVoice.filter.Q.value = 2;
+      const gear = ctx.createOscillator();
+      gear.type = 'triangle';
+      const gearVoice = voice(gear, 'lowpass');
+      gearVoice.filter.frequency.value = 4000;
+      const hum = ctx.createOscillator();
+      hum.type = 'sine';
+      const humVoice = voice(hum, 'lowpass');
+      humVoice.filter.frequency.value = 600;
+      const gravel = ctx.createBufferSource();
+      gravel.buffer = gritBuffer;
+      gravel.loop = true;
+      const gravelVoice = voice(gravel, 'bandpass');
+      gravelVoice.filter.frequency.value = 1800;
+      gravelVoice.filter.Q.value = 0.7;
+      const body = ctx.createBufferSource();
+      body.buffer = noiseBuffer;
+      body.loop = true;
+      const bodyVoice = voice(body, 'lowpass');
+      bodyVoice.filter.frequency.value = 220;
+      const nodes = [motor, gear, hum, gravel, body];
       for (const node of nodes) node.start();
       return {
-        amp, max: .22, nodes,
-        set(level, { rpm = 760, reversing = false } = {}) {
+        amp, max: 0.3, nodes,
+        set(level, { speed = 0, reversing = false, climbing = false } = {}) {
           const t = ctx.currentTime;
-          const crank = rpm / 60;
-          // An inline-four fires twice per revolution. The low-pass filter softens it from inside the cabin.
-          exhaust.frequency.setTargetAtTime(crank * 2, t, .09);
-          vibration.frequency.setTargetAtTime(crank, t, .09);
-          vibrationGain.gain.setTargetAtTime(.23 - .1 * level, t, .11);
-          exhaustFilter.frequency.setTargetAtTime(175 + crank * 6 + 255 * level, t, .11);
-          intake.frequency.setTargetAtTime(500 + crank * 10, t, .12);
-          intakeGain.gain.setTargetAtTime(.03 + .11 * level, t, .12);
-          reverseGear.frequency.setTargetAtTime(175 + crank * 5.2, t, .09);
-          reverseGain.gain.setTargetAtTime(reversing ? .105 : 0, t, .08);
+          const s = Math.max(0, Math.min(1, speed));
+          // Motors work harder (and a little lower) on a climb.
+          const pitch = (140 + 520 * s) * (reversing ? 0.9 : 1) * (climbing ? 0.88 : 1);
+          motor.frequency.setTargetAtTime(pitch, t, 0.12);
+          gear.frequency.setTargetAtTime(pitch * 3.7, t, 0.12);
+          hum.frequency.setTargetAtTime(pitch * 0.5, t, 0.12);
+          motorVoice.filter.frequency.setTargetAtTime(pitch * 2, t, 0.12);
+          motorVoice.level.gain.setTargetAtTime(0.05 + 0.22 * s + (climbing ? 0.08 : 0), t, 0.12);
+          gearVoice.level.gain.setTargetAtTime(0.02 + 0.06 * s, t, 0.12);
+          humVoice.level.gain.setTargetAtTime(0.12 + 0.1 * s, t, 0.12);
+          gravel.playbackRate.setTargetAtTime(0.5 + 1.1 * s, t, 0.12);
+          gravelVoice.level.gain.setTargetAtTime(0.35 * s, t, 0.12);
+          bodyVoice.level.gain.setTargetAtTime(0.12 * s, t, 0.12);
         }
       };
     }
