@@ -10,6 +10,8 @@ const SFX = (() => {
   let ctx = null;
   let master = null;
   let noiseBuffer = null;
+  let rocketBuffer = null;
+  let gritBuffer = null;
   const lastPlayed = new Map();
 
   function audio() {
@@ -28,6 +30,29 @@ const SFX = (() => {
     noiseBuffer = ctx.createBuffer(1, length, ctx.sampleRate);
     const data = noiseBuffer.getChannelData(0);
     for (let i = 0; i < length; i++) data[i] = Math.random() * 2 - 1;
+    // Rocket exhaust: deep brown noise plus the sharp random "crackle" pops
+    // that make real rocket engines sound torn and violent rather than smooth.
+    rocketBuffer = ctx.createBuffer(2, length, ctx.sampleRate);
+    for (let channel = 0; channel < 2; channel++) {
+      const out = rocketBuffer.getChannelData(channel);
+      let brown = 0;
+      let pop = 0;
+      for (let i = 0; i < length; i++) {
+        brown = (brown + 0.02 * (Math.random() * 2 - 1)) / 1.02;
+        if (Math.random() < 0.0025) pop = (Math.random() < 0.5 ? -1 : 1) * (0.4 + Math.random() * 0.6);
+        out[i] = brown * 3.2 + pop + (Math.random() * 2 - 1) * 0.12;
+        pop *= 0.55;
+      }
+    }
+    // Sand and gravel: dense tiny impacts, like debris blasted across the ground.
+    gritBuffer = ctx.createBuffer(1, length, ctx.sampleRate);
+    const grit = gritBuffer.getChannelData(0);
+    let hit = 0;
+    for (let i = 0; i < length; i++) {
+      if (Math.random() < 0.02) hit = Math.random() * 2 - 1;
+      grit[i] = hit;
+      hit *= 0.7;
+    }
     return ctx;
   }
 
@@ -44,8 +69,17 @@ const SFX = (() => {
     else ctx.resume().catch(() => {});
   });
 
+  // Route through a stereo panner when a sound should come from one side.
+  function panned(out, pan) {
+    if (!pan || !ctx.createStereoPanner) return out;
+    const panner = ctx.createStereoPanner();
+    panner.pan.value = pan;
+    panner.connect(out);
+    return panner;
+  }
+
   // A pitched tone with a quick attack and exponential decay.
-  function tone({ type = 'sine', freq = 440, to = null, dur = 0.12, gain = 0.3, delay = 0, attack = 0.005, out = master }) {
+  function tone({ type = 'sine', freq = 440, to = null, dur = 0.12, gain = 0.3, delay = 0, attack = 0.005, out = master, pan = 0 }) {
     const t = ctx.currentTime + delay;
     const osc = ctx.createOscillator();
     const amp = ctx.createGain();
@@ -55,16 +89,16 @@ const SFX = (() => {
     amp.gain.setValueAtTime(0.0001, t);
     amp.gain.exponentialRampToValueAtTime(gain, t + attack);
     amp.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    osc.connect(amp).connect(out);
+    osc.connect(amp).connect(panned(out, pan));
     osc.start(t);
     osc.stop(t + dur + 0.02);
   }
 
   // A filtered noise burst (dust, air, impacts).
-  function noise({ dur = 0.2, gain = 0.3, filter = 'bandpass', freq = 1000, to = null, q = 1, delay = 0, attack = 0.005 }) {
+  function noise({ dur = 0.2, gain = 0.3, filter = 'bandpass', freq = 1000, to = null, q = 1, delay = 0, attack = 0.005, out = master, pan = 0, buffer = noiseBuffer }) {
     const t = ctx.currentTime + delay;
     const src = ctx.createBufferSource();
-    src.buffer = noiseBuffer;
+    src.buffer = buffer;
     src.playbackRate.value = 0.8 + Math.random() * 0.4;
     const f = ctx.createBiquadFilter();
     f.type = filter;
@@ -75,7 +109,7 @@ const SFX = (() => {
     amp.gain.setValueAtTime(0.0001, t);
     amp.gain.exponentialRampToValueAtTime(gain, t + attack);
     amp.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    src.connect(f).connect(amp).connect(master);
+    src.connect(f).connect(amp).connect(panned(out, pan));
     src.start(t, Math.random());
     src.stop(t + dur + 0.02);
   }
@@ -149,20 +183,6 @@ const SFX = (() => {
     },
 
     // ---- Rocket and rover ----
-    // Engine ignition at the start of the descent.
-    ignition: () => {
-      noise({ dur: 0.9, gain: 0.5, freq: 300, to: 2400, q: 0.6, attack: 0.05 });
-      tone({ type: 'sawtooth', freq: 60, to: 140, dur: 0.6, gain: 0.25, attack: 0.03 });
-    },
-    // Touchdown: heavy thud, landing-leg clank, engine cut-off hiss and settling dust.
-    touchdown: () => {
-      tone({ type: 'sine', freq: 110, to: 35, dur: 0.7, gain: 0.6 });
-      tone({ type: 'square', freq: 180, to: 90, dur: 0.15, gain: 0.2 });
-      tone({ type: 'triangle', freq: 640, dur: 0.35, gain: 0.12, delay: 0.04 });
-      tone({ type: 'sine', freq: 1720, dur: 0.4, gain: 0.06, delay: 0.04 });
-      noise({ dur: 0.9, gain: 0.35, filter: 'highpass', freq: 2500, to: 6000 });
-      noise({ dur: 1.8, gain: 0.3, filter: 'lowpass', freq: 1500, to: 150 });
-    },
     brake: () => noise({ dur: 0.5, gain: 0.12, filter: 'lowpass', freq: 1400, to: 300 }),
     chime: () => notes([784, 988, 1175], { type: 'sine', dur: 0.4, gain: 0.12, gap: 0.12 }),
 
@@ -210,35 +230,6 @@ const SFX = (() => {
 
   // Continuous sounds. level 0..1 drives volume (and pitch where it fits).
   const loops = {
-    // Rocket engine: deep rumble plus a mid-range roar so it is audible on laptop speakers,
-    // with a fast flutter like a real exhaust plume.
-    thrust: () => {
-      const src = ctx.createBufferSource();
-      src.buffer = noiseBuffer; src.loop = true;
-      const low = ctx.createBiquadFilter(); low.type = 'lowpass'; low.frequency.value = 500;
-      const roar = ctx.createBiquadFilter(); roar.type = 'bandpass'; roar.frequency.value = 1200; roar.Q.value = 0.7;
-      const roarGain = ctx.createGain(); roarGain.gain.value = 0.55;
-      const rumble = ctx.createOscillator(); rumble.type = 'sawtooth'; rumble.frequency.value = 46;
-      const rumbleGain = ctx.createGain(); rumbleGain.gain.value = 0.3;
-      const flutter = ctx.createOscillator(); flutter.frequency.value = 13;
-      const flutterDepth = ctx.createGain(); flutterDepth.gain.value = 0.15;
-      const body = ctx.createGain(); body.gain.value = 0.85;
-      const amp = ctx.createGain(); amp.gain.value = 0;
-      src.connect(low).connect(body);
-      src.connect(roar).connect(roarGain).connect(body);
-      rumble.connect(rumbleGain).connect(low);
-      flutter.connect(flutterDepth).connect(body.gain);
-      body.connect(amp).connect(master);
-      src.start(); rumble.start(); flutter.start();
-      return {
-        amp, max: 0.75, nodes: [src, rumble, flutter],
-        set(level) {
-          const t = ctx.currentTime;
-          low.frequency.setTargetAtTime(300 + level * 700, t, 0.1);
-          roar.frequency.setTargetAtTime(700 + level * 900, t, 0.1);
-        }
-      };
-    },
     hiss: () => {
       const src = ctx.createBufferSource();
       src.buffer = noiseBuffer; src.loop = true;
@@ -269,6 +260,122 @@ const SFX = (() => {
       };
     }
   };
+
+  // Scripted soundtracks that follow an animation's timeline.
+  // `at(f)` converts a fraction of the animation (0..1) into seconds from now.
+  const sequences = {
+    landing: ({ duration = 3.6 } = {}) => {
+      const t0 = ctx.currentTime + 0.02;
+      const at = fraction => fraction * duration;
+      const time = fraction => t0 + at(fraction);
+      const out = ctx.createGain();
+      out.connect(master);
+      const nodes = [];
+
+      // Main engine: crackling exhaust, softly saturated, plus a roar band and sub-bass.
+      const exhaust = ctx.createBufferSource();
+      exhaust.buffer = rocketBuffer; exhaust.loop = true;
+      const drive = ctx.createWaveShaper();
+      const curve = new Float32Array(1024);
+      for (let i = 0; i < curve.length; i++) curve[i] = Math.tanh((i / 512 - 1) * 2.5);
+      drive.curve = curve;
+      const color = ctx.createBiquadFilter(); color.type = 'lowpass'; color.Q.value = 0.5;
+      const body = ctx.createGain(); body.gain.value = 0;
+      const roarSrc = ctx.createBufferSource();
+      roarSrc.buffer = noiseBuffer; roarSrc.loop = true;
+      const roarBand = ctx.createBiquadFilter(); roarBand.type = 'bandpass'; roarBand.Q.value = 0.6;
+      const roar = ctx.createGain(); roar.gain.value = 0;
+      const sub = ctx.createOscillator(); sub.type = 'sine'; sub.frequency.value = 36;
+      const subGain = ctx.createGain(); subGain.gain.value = 0;
+      // The rocket enters from the upper left and settles in the middle.
+      const enginePan = ctx.createStereoPanner ? ctx.createStereoPanner() : ctx.createGain();
+      exhaust.connect(drive).connect(color).connect(body).connect(enginePan);
+      roarSrc.connect(roarBand).connect(roar).connect(enginePan);
+      sub.connect(subGain).connect(out);
+      enginePan.connect(out);
+      nodes.push(exhaust, roarSrc, sub);
+
+      // Throttle profile, matched to the plume size in the landing animation:
+      // distant cruise -> landing burn at full power -> throttle down -> cut-off.
+      const ramp = (param, points) => {
+        param.setValueAtTime(points[0][1], t0);
+        for (const [fraction, value] of points.slice(1)) param.linearRampToValueAtTime(value, time(fraction));
+      };
+      ramp(body.gain, [[0, 0.001], [0.06, 0.32], [0.29, 0.55], [0.40, 0.95], [0.46, 0.9], [0.68, 0.55], [0.81, 0.3], [0.845, 0.22], [0.86, 0.0001]]);
+      ramp(color.frequency, [[0, 500], [0.29, 1500], [0.40, 4200], [0.68, 2200], [0.81, 1000], [0.86, 500]]);
+      ramp(roar.gain, [[0, 0.001], [0.29, 0.12], [0.40, 0.3], [0.68, 0.16], [0.81, 0.07], [0.86, 0.0001]]);
+      ramp(roarBand.frequency, [[0, 600], [0.40, 1100], [0.81, 700]]);
+      ramp(subGain.gain, [[0, 0.001], [0.29, 0.12], [0.40, 0.3], [0.81, 0.14], [0.86, 0.0001]]);
+      if (enginePan.pan) ramp(enginePan.pan, [[0, -0.75], [0.29, -0.45], [0.51, -0.1], [0.67, 0]]);
+      exhaust.start(t0, Math.random());
+      roarSrc.start(t0, Math.random());
+      sub.start(t0);
+      // The engine layers are silent after cut-off, so free them.
+      for (const node of nodes) node.stop(time(0.9));
+
+      // RCS thrusters: sharp gas puffs on the side each visible jet fires from.
+      const puff = (fraction, pan, strength = 1) => {
+        noise({ out, pan, delay: at(fraction) + 0.02, dur: 0.11 * strength, gain: 0.32 * strength, filter: 'highpass', freq: 2200, attack: 0.002 });
+        noise({ out, pan, delay: at(fraction) + 0.02, dur: 0.06, gain: 0.12 * strength, freq: 600, q: 1.5, attack: 0.002 });
+      };
+      for (const [fraction, strength] of [[0.31, 1], [0.36, 0.6], [0.44, 1], [0.48, 0.6]]) {
+        puff(fraction, 0.7, strength);
+        puff(fraction + 0.004, -0.7, strength * 0.8);
+      }
+      for (const [fraction, strength] of [[0.52, 1], [0.56, 0.7], [0.64, 0.7]]) {
+        puff(fraction, -0.6, strength);
+        puff(fraction + 0.004, 0.6, strength * 0.9);
+      }
+
+      // Exhaust hits the ground: sand and gravel blasting outward.
+      noise({ out, buffer: gritBuffer, delay: at(0.5), dur: at(0.38), gain: 0.3, filter: 'bandpass', freq: 2600, q: 0.5, attack: at(0.22) });
+      noise({ out, delay: at(0.5), dur: at(0.45), gain: 0.18, filter: 'lowpass', freq: 900, to: 300, attack: at(0.2) });
+
+      // Touchdown: legs hit the ground, struts compress, metal rings.
+      const land = at(0.82);
+      tone({ out, delay: land, type: 'sine', freq: 75, to: 30, dur: 0.7, gain: 0.6 });
+      noise({ out, delay: land, dur: 0.25, gain: 0.3, filter: 'lowpass', freq: 500 });
+      for (const [freq, gain, dur] of [[310, 0.12, 0.5], [857, 0.09, 0.6], [1530, 0.05, 0.7], [2410, 0.03, 0.5]]) {
+        tone({ out, delay: land + 0.01, type: 'triangle', freq, dur, gain });
+      }
+      tone({ out, delay: land + 0.05, type: 'sawtooth', freq: 95, to: 70, dur: 0.35, gain: 0.04, attack: 0.05 });
+
+      // Engine shutdown: valves slam shut and the flame collapses.
+      const cutoff = at(0.86);
+      tone({ out, delay: cutoff, type: 'square', freq: 130, to: 60, dur: 0.09, gain: 0.14 });
+      noise({ out, delay: cutoff, dur: 0.7, gain: 0.25, filter: 'lowpass', freq: 2000, to: 200 });
+
+      // After landing: tanks vent with a long hiss and the hot hull ticks as it cools.
+      noise({ out, delay: cutoff + 0.35, dur: 1.9, gain: 0.2, filter: 'highpass', freq: 3500, to: 5500, attack: 0.25 });
+      noise({ out, delay: cutoff + 0.35, dur: 1.9, gain: 0.05, freq: 900, q: 2, attack: 0.25 });
+      for (let i = 0; i < 9; i++) {
+        tone({ out, delay: cutoff + 0.6 + Math.random() * 3.2, type: 'triangle', freq: 1800 + Math.random() * 2200, dur: 0.025, gain: 0.03 + Math.random() * 0.05, pan: Math.random() - 0.5 });
+      }
+
+      return {
+        stop(fade = 0.3) {
+          const now = ctx.currentTime;
+          out.gain.cancelScheduledValues(now);
+          out.gain.setValueAtTime(out.gain.value, now);
+          out.gain.linearRampToValueAtTime(0, now + fade);
+          for (const node of nodes) { try { node.stop(now + fade + 0.05); } catch {} }
+          setTimeout(() => out.disconnect(), (fade + 6) * 1000);
+        }
+      };
+    }
+  };
+
+  // Plays a scripted soundtrack. Skipped when the page has had no click or key
+  // press yet: audio would stay blocked and start late, out of sync with the animation.
+  function sequence(name, options) {
+    const silent = { stop() {} };
+    if (muted || !sequences[name] || !audio()) return silent;
+    if (ctx.state !== 'running') {
+      if (navigator.userActivation && !navigator.userActivation.hasBeenActive) return silent;
+      ctx.resume().catch(() => {});
+    }
+    try { return sequences[name](options); } catch { return silent; }
+  }
 
   function play(name, options) {
     if (muted || !sounds[name] || !audio()) return;
@@ -339,5 +446,5 @@ const SFX = (() => {
     setMuted(!muted);
   });
 
-  return { play, loop, get muted() { return muted; }, setMuted };
+  return { play, loop, sequence, get muted() { return muted; }, setMuted };
 })();
