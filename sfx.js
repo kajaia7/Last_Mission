@@ -125,7 +125,27 @@ const SFX = (() => {
     blip: ({ pitch = 1 } = {}) => tone({ type: 'triangle', freq: 1046 * pitch, dur: 0.07, gain: 0.14 }),
     close: () => tone({ type: 'triangle', freq: 780, to: 420, dur: 0.1, gain: 0.12 }),
     denied: () => notes([196, 165], { type: 'square', dur: 0.13, gain: 0.09, gap: 0.12 }),
-    type: () => tone({ type: 'square', freq: vary(1800, 0.15), dur: 0.025, gain: 0.04 }),
+    // Chapter title card. Big "SOL 01" letters stamp in on a rising scale...
+    titleStamp: ({ index = 0 } = {}) => {
+      const scale = [262, 330, 392, 440, 523, 659, 784];
+      const freq = scale[Math.min(index, scale.length - 1)];
+      tone({ type: 'square', freq, dur: 0.11, gain: 0.09 });
+      tone({ type: 'square', freq: freq * 2, dur: 0.05, gain: 0.04 });
+      tone({ type: 'sine', freq: 150, to: 55, dur: 0.14, gain: 0.3 });
+      noise({ dur: 0.03, gain: 0.12, filter: 'highpass', freq: 4000 });
+    },
+    // ...the chapter name types out with lighter, alternating 8-bit blips...
+    titleType: ({ index = 0 } = {}) => {
+      const freq = index % 2 ? 1568 : 1319;
+      tone({ type: 'square', freq: vary(freq, 0.02), dur: 0.035, gain: 0.045 });
+      tone({ type: 'triangle', freq: freq / 2, dur: 0.05, gain: 0.05 });
+    },
+    // ...and a bright chime lands when the full title is on screen.
+    titleSting: () => {
+      notes([523, 659, 784], { type: 'triangle', dur: 0.9, gain: 0.1, gap: 0.07 });
+      notes([1046, 1568], { type: 'sine', dur: 1.3, gain: 0.05, gap: 0.1, delay: 0.2 });
+      noise({ dur: 0.6, gain: 0.04, filter: 'highpass', freq: 6000, attack: 0.1, delay: 0.15 });
+    },
     page: () => noise({ dur: 0.18, gain: 0.12, filter: 'highpass', freq: 2500, to: 5000 }),
 
     // ---- Astronaut ----

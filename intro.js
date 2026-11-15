@@ -45,11 +45,15 @@
       const nameStart = sol.length * characterDelay + lineDelay;
       const solCount = reducedMotion ? sol.length : Math.min(sol.length, 1 + Math.floor(elapsed / characterDelay));
       const nameCount = reducedMotion ? title.length : Math.min(title.length, Math.max(0, 1 + Math.floor((elapsed - nameStart) / characterDelay)));
-      // Typewriter tick for each new letter.
-      if (solCount + nameCount > arrivalSol.textContent.length + arrivalName.textContent.length) SFX.play('type');
+      // "SOL 01" letters stamp in on a rising scale; the chapter name types with lighter blips.
+      const typedSol = solCount > arrivalSol.textContent.length && sol[solCount - 1] !== ' ';
+      const typedName = nameCount > arrivalName.textContent.length && title[nameCount - 1] !== ' ';
+      if (typedSol) SFX.play('titleStamp', { index: sol.slice(0, solCount).replace(/ /g, '').length - 1 });
+      else if (typedName) SFX.play('titleType', { index: nameCount });
       arrivalSol.textContent = sol.slice(0, solCount);
       arrivalName.textContent = title.slice(0, nameCount);
       if (nameCount === title.length) {
+        SFX.play('titleSting');
         delete arrivalTitle.dataset.typing;
         arrivalTimer = window.setTimeout(endArrivalTitle, 2400);
       } else {
