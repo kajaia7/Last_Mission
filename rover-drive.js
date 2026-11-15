@@ -63,7 +63,10 @@ function createRoverDrive(onExit) {
   const tireDiameter = 86;
   const tireFaceRatio = .84;
   // The original wheel art, traced from the outpost's middle wheel.
-  const tireArt = { x: 1493, y: 590, width: 105, height: 88, hubX: 66, hubY: 43, faceX: 32, faceY: 41 };
+  const tireArt = { x: 1493, y: 590, width: 105, height: 88, hubX: 66, hubY: 43, faceX: 34, faceY: 42,
+    // Rows of tread that roll around the tire band (fully covered across the tire's width).
+    treadRow: 34, treadRows: 24 };
+  const tireOutline = new Path2D('M43 1H75V4H83V9H89V15H94V23H98V32H101V59H98V68H94V75H89V81H82V86H26V84H15V80H10V74H6V63H3V33H5V23H9V16H15V10H23V6H33V3H43Z');
   const terrainScale = 2;
   const tires = [
     { x: 39, mount: 36, radius: 9.8, phase: .4 },
@@ -93,6 +96,8 @@ function createRoverDrive(onExit) {
   let stepOutTime = 0;
   let chassisSprite;
   let tireSprite;
+  let treadPattern;
+  let treadShade;
   let roadSprite;
   let dustInterval = 0;
   let engineSound = null;
@@ -452,26 +457,51 @@ function createRoverDrive(onExit) {
     tireSprite.height = tireArt.height;
     const tire = tireSprite.getContext('2d');
     // Trace the outpost's middle wheel so its tread keeps the same perspective as the chassis.
-    tire.clip(new Path2D('M43 1H75V4H83V9H89V15H94V23H98V32H101V59H98V68H94V75H89V81H82V86H26V84H15V80H10V74H6V63H3V33H5V23H9V16H15V10H23V6H33V3H43Z'));
+    tire.clip(tireOutline);
     tire.drawImage(outpost, -tireArt.x, -tireArt.y);
+
+    // A strip of tread rows that repeats seamlessly, so the band can roll.
+    const strip = document.createElement('canvas');
+    strip.width = tireArt.width;
+    strip.height = tireArt.treadRows;
+    strip.getContext('2d').drawImage(tireSprite, 0, tireArt.treadRow, tireArt.width, tireArt.treadRows,
+      0, 0, tireArt.width, tireArt.treadRows);
+    treadPattern = ctx.createPattern(strip, 'repeat');
+    // Keep the tire round: light on top, shadow underneath.
+    treadShade = ctx.createLinearGradient(0, 0, 0, tireArt.height);
+    treadShade.addColorStop(0, '#ffd0a033');
+    treadShade.addColorStop(.5, '#00000000');
+    treadShade.addColorStop(1, '#1a0c1466');
   }
 
   function drawTire(axle, farSide = false) {
     // Each wheel rides its own suspension and turns with the distance it rolls.
-    // The static art keeps the tire's side band; the whole wheel face (rim, hub and
-    // the tread blocks on its edge) spins on top of it.
+    // The tread band rolls around the tire, and the wheel face (rim, hub and the
+    // tread notches on its edge) spins on top, so the whole wheel turns.
     const turn = axle.phase - (reducedMotion.matches ? 0 : wheelTravel * heading / axle.radius);
     const scale = axle.radius * 2 / tireDiameter;
-    const { hubX, hubY, faceX, faceY } = tireArt;
+    const { width, height, hubX, hubY, faceX, faceY, treadRow, treadRows } = tireArt;
     ctx.save();
     ctx.translate(axle.centerX, axle.centerY);
     ctx.scale(-scale * heading, scale);
     if (farSide) ctx.filter = 'brightness(.63)';
-    ctx.drawImage(tireSprite, -hubX, -hubY);
+
+    // Tread band: on a clockwise turn the visible side of the tread moves upward.
+    ctx.save();
+    ctx.translate(-hubX, -hubY);
+    ctx.clip(tireOutline);
+    const roll = ((-turn * hubY) % treadRows + treadRows) % treadRows;
+    treadPattern.setTransform(new DOMMatrix().translate(0, treadRow + roll));
+    ctx.fillStyle = treadPattern;
+    ctx.fillRect(0, 0, width, height);
+    ctx.fillStyle = treadShade;
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
+
+    // Wheel face, rotated in its own (foreshortened) plane so it still reads as 3D.
     ctx.beginPath();
     ctx.ellipse(0, 0, faceX, faceY, 0, 0, Math.PI * 2);
     ctx.clip();
-    // Rotate in the face's own (foreshortened) plane so the wheel still reads as 3D.
     ctx.scale(faceX / faceY, 1);
     ctx.rotate(turn);
     ctx.scale(faceY / faceX, 1);
