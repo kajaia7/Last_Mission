@@ -65,7 +65,9 @@ function createRoverDrive(onExit) {
   // The original wheel art, traced from the outpost's middle wheel.
   const tireArt = { x: 1493, y: 590, width: 105, height: 88, hubX: 66, hubY: 43, faceX: 34, faceY: 42,
     // Rows of tread that roll around the tire band (fully covered across the tire's width).
-    treadRow: 34, treadRows: 24 };
+    treadRow: 34, treadRows: 24,
+    // The spinning face fades out from this fraction of its size, blending into the tread.
+    faceFade: .74 };
   const tireOutline = new Path2D('M43 1H75V4H83V9H89V15H94V23H98V32H101V59H98V68H94V75H89V81H82V86H26V84H15V80H10V74H6V63H3V33H5V23H9V16H15V10H23V6H33V3H43Z');
   const terrainScale = 2;
   const tires = [
@@ -98,6 +100,8 @@ function createRoverDrive(onExit) {
   let tireSprite;
   let treadPattern;
   let treadShade;
+  let faceLayer;
+  let faceMask;
   let roadSprite;
   let dustInterval = 0;
   let engineSound = null;
@@ -464,14 +468,36 @@ function createRoverDrive(onExit) {
     const strip = document.createElement('canvas');
     strip.width = tireArt.width;
     strip.height = tireArt.treadRows;
-    strip.getContext('2d').drawImage(tireSprite, 0, tireArt.treadRow, tireArt.width, tireArt.treadRows,
-      0, 0, tireArt.width, tireArt.treadRows);
+    // Use only real tread columns: the band's own columns, continued with its inner
+    // columns, so no hub pieces or the dark band/face border end up in the tread.
+    const stripCtx = strip.getContext('2d');
+    stripCtx.drawImage(tireSprite, 0, tireArt.treadRow, 30, tireArt.treadRows, 0, 0, 30, tireArt.treadRows);
+    for (let x = 30; x < tireArt.width; x += 22) {
+      stripCtx.drawImage(tireSprite, 8, tireArt.treadRow, 22, tireArt.treadRows, x, 0, 22, tireArt.treadRows);
+    }
     treadPattern = ctx.createPattern(strip, 'repeat');
     // Keep the tire round: light on top, shadow underneath.
     treadShade = ctx.createLinearGradient(0, 0, 0, tireArt.height);
     treadShade.addColorStop(0, '#ffd0a033');
     treadShade.addColorStop(.5, '#00000000');
     treadShade.addColorStop(1, '#1a0c1466');
+
+    // The spinning face is drawn on its own layer and faded at the edge (no hard ring).
+    faceLayer = document.createElement('canvas');
+    faceLayer.width = tireArt.width;
+    faceLayer.height = tireArt.height;
+    faceMask = document.createElement('canvas');
+    faceMask.width = tireArt.width;
+    faceMask.height = tireArt.height;
+    const mask = faceMask.getContext('2d');
+    mask.translate(tireArt.hubX, tireArt.hubY);
+    mask.scale(tireArt.faceX / tireArt.faceY, 1);
+    const fade = mask.createRadialGradient(0, 0, 0, 0, 0, tireArt.faceY);
+    fade.addColorStop(0, '#000');
+    fade.addColorStop(tireArt.faceFade, '#000');
+    fade.addColorStop(1, '#0000');
+    mask.fillStyle = fade;
+    mask.fillRect(-tireArt.faceY, -tireArt.faceY, tireArt.faceY * 2, tireArt.faceY * 2);
   }
 
   function drawTire(axle, farSide = false) {
@@ -498,14 +524,21 @@ function createRoverDrive(onExit) {
     ctx.fillRect(0, 0, width, height);
     ctx.restore();
 
-    // Wheel face, rotated in its own (foreshortened) plane so it still reads as 3D.
-    ctx.beginPath();
-    ctx.ellipse(0, 0, faceX, faceY, 0, 0, Math.PI * 2);
-    ctx.clip();
-    ctx.scale(faceX / faceY, 1);
-    ctx.rotate(turn);
-    ctx.scale(faceY / faceX, 1);
-    ctx.drawImage(tireSprite, -hubX, -hubY);
+    // Wheel face, rotated in its own (foreshortened) plane so it still reads as 3D,
+    // then faded at its edge so it blends into the rolling tread.
+    const face = faceLayer.getContext('2d');
+    face.globalCompositeOperation = 'source-over';
+    face.setTransform(1, 0, 0, 1, 0, 0);
+    face.clearRect(0, 0, width, height);
+    face.translate(hubX, hubY);
+    face.scale(faceX / faceY, 1);
+    face.rotate(turn);
+    face.scale(faceY / faceX, 1);
+    face.drawImage(tireSprite, -hubX, -hubY);
+    face.setTransform(1, 0, 0, 1, 0, 0);
+    face.globalCompositeOperation = 'destination-in';
+    face.drawImage(faceMask, 0, 0);
+    ctx.drawImage(faceLayer, -hubX, -hubY);
     ctx.restore();
   }
 
