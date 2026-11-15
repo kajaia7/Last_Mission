@@ -9,7 +9,14 @@
   <p id="status" class="status" role="status" aria-live="polite"></p>
  </header>
  <nav class="steps" aria-label="Mission steps"><span id="step-find" class="step active" aria-current="step"><i>1</i> FIND</span><span id="step-seal" class="step"><i>2</i> SEAL</span><span id="step-test" class="step"><i>3</i> CHECK</span></nav>
- <section class="pressure task-instrument" aria-label="Cabin air"><div class="pressure-top"><span>CABIN AIR</span><strong id="pressure-label" class="task-readout">LOW</strong></div><div id="pressure-meter" class="pressure-meter task-meter" role="progressbar" aria-label="Relative cabin air level" aria-describedby="pressure-note" aria-valuemin="0" aria-valuemax="100" aria-valuenow="58"><span id="pressure-fill"></span></div><p id="pressure-note">Cabin air is leaking.</p></section>
+ <section class="pressure task-instrument" aria-label="Cabin air">
+  <div class="pressure-top"><span>CABIN AIR</span><strong id="pressure-label" class="task-readout">LOW</strong></div>
+  <div id="pressure-meter" class="pressure-meter task-meter" role="progressbar" aria-label="Relative cabin air level" aria-describedby="pressure-note" aria-valuemin="0" aria-valuemax="100" aria-valuenow="58"><span id="pressure-fill"></span></div>
+  <div class="pressure-footer">
+   <p id="pressure-note">Cabin air is leaking.</p>
+   <strong id="pressure-percentage" aria-hidden="true">58%</strong>
+  </div>
+ </section>
  </div>
  <div class="service-bay">
   <div id="stage" class="stage" aria-label="Mars habitat oxygen service bay"><img class="bay-art" src="./assets/oxygen-bay.png" alt="A cream-and-orange Mars service bay with oxygen tanks, pipework and six bolted joints" draggable="false"><div class="light" aria-hidden="true"></div><div id="joints" class="joints" tabindex="-1" aria-label="Six pipe joints. Move the scanner or use Tab and Enter to inspect each one."></div><div id="scan-cursor" class="scan-cursor" aria-hidden="true" hidden></div></div>
