@@ -32,6 +32,10 @@ function rockArt(type,variant=0){const r=ROCKS[type];const clipId = 'rock-face-'
 
 
 const $=id=>document.getElementById(id);
+const fromResearchStation = window.parent !== window
+  && new URLSearchParams(location.search).get('from') === 'research-station';
+const returnLink = document.querySelector('#win .task-return');
+const resultAction = fromResearchStation ? returnLink : $('review-notes');
 let state,busy=false,epoch=0,scopeMode='guide',notesMode='review',drag=null,suppressClick=false;
 const timers=new Set(),flying=$('flying-rock');
 const lab = $('lab');
@@ -116,11 +120,11 @@ function advanceSample(){if(state.phase!=='correct')return;state=nextSample(stat
 function closeNotes(advance=false){
  if(!$('notes-dialog').open)return;$('notes-dialog').close();
  if(notesMode==='discovery'){if(state.phase==='complete'){win();return;}if(advance){advanceSample();return;}}
- if(!$('win').hidden)$('review-notes').focus({preventScroll:true});else if(state.phase==='correct')$('next').focus({preventScroll:true});else $('open-notes').focus({preventScroll:true});
+ if(!$('win').hidden)resultAction.focus({preventScroll:true});else if(state.phase==='correct')$('next').focus({preventScroll:true});else $('open-notes').focus({preventScroll:true});
 }
 function setGameInert(value){for(const selector of ['#tools','#bins','#sample-area','.controls','#reference-board','#open-notes'])document.querySelector(selector).inert=value;}
 function win(){
- SFX.play('win');$('game').classList.add('complete');setGameInert(true);$('win').hidden=false;$('review-notes').focus({preventScroll:true});
+ SFX.play('win');$('game').classList.add('complete');setGameInert(true);$('win').hidden=false;resultAction.focus({preventScroll:true});
  for(let i=0;i<27;i++){const p=document.createElement('i');p.className='spark';p.style.cssText=`--x:${4+i*3.5}%;--delay:${i%6*.1}s;--colour:${['#f3c774','#8bdbca','#e78b60'][i%3]}`;$('celebration').append(p);}later(()=>$('celebration').replaceChildren(),4000);
 }
 function reset(){
@@ -137,9 +141,9 @@ for(const tool of TOOLS)$('use-'+tool).addEventListener('click',()=>useTool(tool
 $('reference-board').addEventListener('click',()=>{if(!busy)openScope('guide');});$('scope-done').addEventListener('click',closeScope);$('close-scope').addEventListener('click',closeScope);$('scope-dialog').addEventListener('cancel',event=>{event.preventDefault();closeScope();});
 $('next').addEventListener('click',advanceSample);$('restart').addEventListener('click',reset);
 $('open-notes').addEventListener('click',()=>{if(!busy)openNotes('review');});$('review-notes').addEventListener('click',()=>openNotes('review'));$('notes-continue').addEventListener('click',()=>closeNotes(true));$('close-notes').addEventListener('click',()=>closeNotes(false));$('notes-dialog').addEventListener('cancel',event=>{event.preventDefault();closeNotes(false);});
-if (window.parent !== window && new URLSearchParams(location.search).get('from') === 'research-station') {
- const returnLink = document.querySelector('#win .task-return');
- returnLink.textContent = '← Return to rover';
+if (fromResearchStation) {
+ returnLink.textContent = 'Return to rover →';
+ returnLink.classList.add('primary');
  returnLink.href = '../../index.html#chapter-1';
  returnLink.addEventListener('click', event => {
   event.preventDefault();
